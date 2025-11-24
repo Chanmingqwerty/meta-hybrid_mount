@@ -53,7 +53,7 @@ fn main() -> Result<()> {
         fs::remove_file(temp_dir.join(".gitignore"))?;
     }
 
-    // Copy binary
+    // Copy binary (Rename to meta-hybrid)
     file::copy(
         bin_path(),
         temp_dir.join("meta-hybrid"),
@@ -64,7 +64,8 @@ fn main() -> Result<()> {
     build_webui()?;
 
     // Zip it
-    let options = FileOptions::default()
+    // FIX: Explicitly specify the type parameter <()> for FileOptions
+    let options = FileOptions::<()>::default()
         .compression_method(CompressionMethod::Deflated)
         .compression_level(Some(9));
         
