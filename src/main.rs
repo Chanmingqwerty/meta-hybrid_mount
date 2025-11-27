@@ -1,7 +1,7 @@
 mod config;
 mod defs;
 mod engine;
-mod logger; // New module
+mod logger;
 #[path = "magic_mount/mod.rs"]
 mod magic_mount;
 mod overlay_mount;
@@ -9,7 +9,6 @@ mod scanner;
 mod utils;
 
 use std::path::{Path, PathBuf};
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use config::{Config, CONFIG_FILE_DEFAULT};
@@ -87,8 +86,7 @@ fn main() -> Result<()> {
         cli.partitions,
     );
 
-    // 2. Init Tracing Logger
-    // Uses the new logger module
+    // Init tracing logger instead of utils::init_logger
     logger::init(config.verbose, Path::new(defs::DAEMON_LOG_FILE))?;
 
     if config.verbose {
@@ -98,11 +96,11 @@ fn main() -> Result<()> {
 
     tracing::info!("Hybrid Mount Starting...");
 
-    // 3. Scan
+    // 1. Scan Modules
     let active_modules = scanner::scan_active_modules()?;
     tracing::info!("Found {} enabled modules (Standard + Mnt)", active_modules.len());
 
-    // 4. Engine Run
+    // 2. Execute Engine
     engine::run(active_modules, &config)?;
 
     Ok(())

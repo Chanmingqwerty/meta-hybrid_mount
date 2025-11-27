@@ -3,7 +3,7 @@ use anyhow::Result;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::fmt::FormatFields; // 修复编译错误的关键
+use tracing_subscriber::fmt::FormatFields;
 
 struct SimpleFormatter;
 
@@ -22,10 +22,9 @@ where
         let level = metadata.level();
         let target = metadata.target();
 
-        // Match original format: [INFO] [target] message
+        // Match original log format: [LEVEL] [Target] Message
         write!(writer, "[{}] [{}] ", level, target)?;
 
-        // Write the actual message
         ctx.format_fields(writer.by_ref(), event)?;
         writeln!(writer)
     }
@@ -34,13 +33,11 @@ where
 pub fn init(verbose: bool, log_path: &Path) -> Result<()> {
     let level = if verbose { "debug" } else { "info" };
     
-    // Ensure log directory exists
     if let Some(parent) = log_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    // 1. File Layer (Blocking for CLI reliability)
-    // Using standard File append mode to ensure logs are flushed before process exit.
+    // Using standard blocking file append to ensure logs persist on exit
     let file_appender = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -51,17 +48,14 @@ pub fn init(verbose: bool, log_path: &Path) -> Result<()> {
         .with_ansi(false)
         .event_format(SimpleFormatter);
 
-    // 2. Filter Layer
     let filter = EnvFilter::new(level);
 
-    // 3. Init
     tracing_subscriber::registry()
         .with(filter)
         .with(file_layer)
         .init();
 
-    // Redirect standard `log` crate macros to `tracing`
-    // This ensures dependencies using `log::info!` still work
+    // Capture standard log crate macros
     tracing_log::LogTracer::init()?;
 
     Ok(())
