@@ -1,4 +1,3 @@
-
 pub(super) const REPLACE_DIR_FILE_NAME: &str = ".replace";
 pub(super) const REPLACE_DIR_XATTR: &str = "trusted.overlay.opaque";
 
@@ -22,7 +21,6 @@ use rustix::{
 };
 
 use crate::utils::{ensure_dir_exists, lgetfilecon, lsetfilecon, send_unmountable};
-
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub(super) enum NodeFileType {
@@ -77,46 +75,27 @@ impl fmt::Display for Node {
             is_root: bool
         ) -> fmt::Result {
             let connector = if is_root { "" } else if is_last { "└── " } else { "├── " };
-            
             let name = if node.name.is_empty() { "/" } else { &node.name };
-            
             let mut flags = Vec::new();
             if node.replace { flags.push("REPLACE"); }
             if node.skip { flags.push("SKIP"); }
-            
-            let flag_str = if flags.is_empty() { 
-                String::new() 
-            } else { 
-                format!(" [{}]", flags.join("|")) 
-            };
-
+            let flag_str = if flags.is_empty() { String::new() } else { format!(" [{}]", flags.join("|")) };
             let source_str = if let Some(p) = &node.module_path {
                 format!(" -> {}", p.display())
             } else {
                 String::new()
             };
-
             writeln!(f, "{}{}{} [{}]{}{}", prefix, connector, name, node.file_type, flag_str, source_str)?;
-
-            let child_prefix = if is_root {
-                ""
-            } else if is_last {
-                "    "
-            } else {
-                "│   "
-            };
+            let child_prefix = if is_root { "" } else if is_last { "    " } else { "│   " };
             let new_prefix = format!("{}{}", prefix, child_prefix);
-
             let mut children: Vec<_> = node.children.values().collect();
             children.sort_by(|a, b| a.name.cmp(&b.name));
-
             for (i, child) in children.iter().enumerate() {
                 let is_last_child = i == children.len() - 1;
                 print_tree(child, f, &new_prefix, is_last_child, false)?;
             }
             Ok(())
         }
-
         print_tree(self, f, "", true, true)
     }
 }
@@ -125,16 +104,13 @@ impl Node {
     pub(super) fn collect_module_files<T: AsRef<Path>>(&mut self, module_dir: T) -> Result<bool> {
         let dir = module_dir.as_ref();
         let mut has_file = false;
-        
         if let Ok(entries) = dir.read_dir() {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-
                 let node = match self.children.entry(name.clone()) {
                     Entry::Occupied(o) => Some(o.into_mut()),
                     Entry::Vacant(v) => Self::new_module(&name, &entry).map(|it| v.insert(it)),
                 };
-
                 if let Some(node) = node {
                     has_file |= if node.file_type == NodeFileType::Directory {
                         node.collect_module_files(dir.join(&node.name))? || node.replace
@@ -144,7 +120,6 @@ impl Node {
                 }
             }
         }
-
         Ok(has_file)
     }
 
@@ -157,23 +132,16 @@ impl Node {
                 return Ok(true);
             }
         }
-
         let path_str = path.as_ref().to_string_lossy();
         let c_path = CString::new(path_str.as_bytes())?;
-        
         let fd = unsafe { libc::open(c_path.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY) };
-
-        if fd < 0 {
-            return Ok(false);
-        }
-
+        if fd < 0 { return Ok(false); }
         let exists = unsafe {
             let replace = CString::new(REPLACE_DIR_FILE_NAME)?;
             let ret = libc::faccessat(fd, replace.as_ptr(), libc::F_OK, 0);
             libc::close(fd);
             ret
         };
-
         if exists == 0 { Ok(true) } else { Ok(false) }
     }
 
@@ -200,9 +168,7 @@ impl Node {
                 let mut replace = false;
                 if file_type == NodeFileType::Directory {
                     if let Ok(s) = Self::dir_is_replace(&path) {
-                         if s {
-                            replace = true;
-                         }
+                         if s { replace = true; }
                     }
                 }
                 return Some(Node {
@@ -215,11 +181,9 @@ impl Node {
                 });
             }
         }
-
         None
     }
 }
-
 
 fn collect_module_files(content_paths: &[PathBuf], extra_partitions: &[String]) -> Result<Option<Node>> {
     let mut root = Node::new_root("");
@@ -228,10 +192,7 @@ fn collect_module_files(content_paths: &[PathBuf], extra_partitions: &[String]) 
 
     for module_path in content_paths {
         let module_system = module_path.join("system");
-        if !module_system.is_dir() {
-            continue;
-        }
-
+        if !module_system.is_dir() { continue; }
         log::debug!("collecting {}", module_path.display());
         has_file |= system.collect_module_files(&module_system)?;
     }
@@ -255,7 +216,6 @@ fn collect_module_files(content_paths: &[PathBuf], extra_partitions: &[String]) 
                         if let Some(ref p) = node.module_path {
                             if let Ok(meta) = fs::metadata(p) {
                                 if meta.is_dir() {
-                                    log::debug!("treating symlink {} as directory for recursion", name);
                                     node.file_type = NodeFileType::Directory;
                                 }
                             }
@@ -267,12 +227,8 @@ fn collect_module_files(content_paths: &[PathBuf], extra_partitions: &[String]) 
         }
 
         for partition in extra_partitions {
-            if BUILTIN_PARTITIONS.iter().any(|(p, _)| p == partition) {
-                continue;
-            }
-            if partition == "system" {
-                continue;
-            }
+            if BUILTIN_PARTITIONS.iter().any(|(p, _)| p == partition) { continue; }
+            if partition == "system" { continue; }
 
             let path_of_root = Path::new("/").join(partition);
             let path_of_system = Path::new("/system").join(partition);
@@ -281,12 +237,10 @@ fn collect_module_files(content_paths: &[PathBuf], extra_partitions: &[String]) 
             if path_of_root.is_dir() && (!require_symlink || path_of_system.is_symlink()) {
                 let name = partition.to_string();
                 if let Some(mut node) = system.children.remove(&name) {
-                    log::debug!("attach extra partition '{}' to root", name);
                     if node.file_type == NodeFileType::Symlink {
                         if let Some(ref p) = node.module_path {
                             if let Ok(meta) = fs::metadata(p) {
                                 if meta.is_dir() {
-                                    log::debug!("treating symlink {} as directory for recursion", name);
                                     node.file_type = NodeFileType::Directory;
                                 }
                             }
@@ -371,11 +325,12 @@ fn mount_symlink<WP: AsRef<Path>>(
 fn should_create_tmpfs(node: &Node, path: &Path, has_tmpfs: bool) -> bool {
     if has_tmpfs { return true; }
     
+    if node.module_path.is_some() { return true; }
+
     if node.replace && node.module_path.is_some() { return true; }
 
     for (name, child) in &node.children {
         let real_path = path.join(name);
-        
         let need = match child.file_type {
             NodeFileType::Symlink => true,
             NodeFileType::Whiteout => real_path.exists(),
@@ -384,24 +339,18 @@ fn should_create_tmpfs(node: &Node, path: &Path, has_tmpfs: bool) -> bool {
                     let ft = NodeFileType::from_file_type(meta.file_type()).unwrap_or(NodeFileType::Whiteout);
                     ft != child.file_type || ft == NodeFileType::Symlink
                 } else { 
-                    true
+                    true 
                 }
             }
         };
 
         if need {
             if node.module_path.is_none() {
-                log::error!(
-                    "Cannot create tmpfs on {} (no module source), ignoring conflicting child: {}",
-                    path.display(),
-                    name
-                );
                 return false;
             }
             return true;
         }
     }
-    
     false
 }
 
@@ -439,14 +388,19 @@ fn mount_directory_children<P: AsRef<Path>, WP: AsRef<Path>>(
     if has_tmpfs && path.as_ref().exists() && !node.replace {
         for entry in path.as_ref().read_dir()?.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if !node.children.contains_key(&name) {
-                mount_mirror(&path, &work_dir_path, &entry)?;
+            let is_whiteout = node.children.get(&name).map_or(false, |n| n.file_type == NodeFileType::Whiteout);
+            
+            if !node.children.contains_key(&name) || is_whiteout {
+                if !is_whiteout {
+                    mount_mirror(&path, &work_dir_path, &entry)?;
+                }
             }
         }
     }
 
     for (_name, child_node) in node.children {
         if child_node.skip { continue; }
+        if child_node.file_type == NodeFileType::Whiteout { continue; }
 
         do_magic_mount(
             &path, 
@@ -538,8 +492,6 @@ pub fn mount_partitions(
     disable_umount: bool,
 ) -> Result<()> {
     if let Some(root) = collect_module_files(module_paths, extra_partitions)? {
-        log::debug!("Magic Mount Root: {}", root);
-
         let tmp_dir = tmp_path.join("workdir");
         ensure_dir_exists(&tmp_dir)?;
 
@@ -555,7 +507,6 @@ pub fn mount_partitions(
 
         result
     } else {
-        log::info!("No files to magic mount");
         Ok(())
     }
 }
