@@ -21,25 +21,26 @@ esac
 ui_print "- Device Architecture: $ARCH ($ABI)"
 
 BIN_SOURCE="$MODPATH/binaries/$ABI/meta-hybrid"
-BIN_TARGET="$MODPATH/system/bin/meta-hybrid"
+BIN_TARGET="$MODPATH/meta-hybrid"
 
 if [ ! -f "$BIN_SOURCE" ]; then
   abort "! Binary for $ABI not found in this zip!"
 fi
 
 ui_print "- Installing binary for $ABI..."
-mkdir -p "$(dirname "$BIN_TARGET")"
 cp -f "$BIN_SOURCE" "$BIN_TARGET"
 
 set_perm "$BIN_TARGET" 0 0 0755
 
 rm -rf "$MODPATH/binaries"
+rm -rf "$MODPATH/system"
 
 BASE_DIR="/data/adb/meta-hybrid"
 mkdir -p "$BASE_DIR"
 
 if [ ! -f "$BASE_DIR/config.toml" ]; then
   ui_print "- Installing default config"
+  # 注意：这里假设 zip 根目录有 config.toml，如果没有，unzip 步骤已经释放到了 MODPATH
   cat "$MODPATH/config.toml" > "$BASE_DIR/config.toml"
 fi
 
@@ -62,5 +63,6 @@ else
 fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
+set_perm "$BIN_TARGET" 0 0 0755
 
 ui_print "- Installation complete"
