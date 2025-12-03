@@ -30,8 +30,7 @@ jobs:
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r26b
-
+          ndk-version: r27
 
       - name: Install Build Dependencies
         run: |
@@ -40,7 +39,7 @@ jobs:
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-linux-android
+          targets: aarch64-linux-android,x86_64-linux-android,riscv64-linux-android
           components: rust-src
 
       - name: Cache Rust dependencies
