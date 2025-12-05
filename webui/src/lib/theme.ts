@@ -1,14 +1,26 @@
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+interface Hsl {
+  h: number;
+  s: number;
+  l: number;
+}
+
 export const Monet = {
-  hexToRgb: (hex) => {
+  hexToRgb: (hex: string): Rgb | null => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
   },
-  rgbToHsl: (r, g, b) => {
+  rgbToHsl: (r: number, g: number, b: number): Hsl => {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h, s, l = (max + min) / 2;
-    if (max === min) h = s = 0;
-    else {
+    let h = 0, s = 0, l = (max + min) / 2;
+    
+    if (max !== min) {
       const d = max - min;
       s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
       switch (max) {
@@ -20,20 +32,20 @@ export const Monet = {
     }
     return { h: h * 360, s: s * 100, l: l * 100 };
   },
-  hslToHex: (h, s, l) => {
+  hslToHex: (h: number, s: number, l: number): string => {
     l /= 100;
     const a = s * Math.min(l, 1 - l) / 100;
-    const f = n => {
+    const f = (n: number) => {
       const k = (n + h / 30) % 12;
       const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
       return Math.round(255 * color).toString(16).padStart(2, '0');
     };
     return `#${f(0)}${f(8)}${f(4)}`;
   },
-  getTone: (baseHsl, lAdjust, sAdjust = 0, hAdjust = 0) => {
+  getTone: (baseHsl: { h: number; s: number }, lAdjust: number, sAdjust = 0, hAdjust = 0): string => {
     return Monet.hslToHex((baseHsl.h + hAdjust) % 360, Math.max(0, Math.min(100, baseHsl.s + sAdjust)), lAdjust);
   },
-  apply: (seedHex, isDark) => {
+  apply: (seedHex: string | null, isDark: boolean) => {
     if (!seedHex) return;
     const rgb = Monet.hexToRgb(seedHex);
     if (!rgb) return;
@@ -44,6 +56,7 @@ export const Monet = {
     const n = { h: base.h, s: Math.min(base.s, 10) };
     const nv = { h: base.h, s: Math.min(base.s, 15) };
     const err = { h: 350, s: 80 };
+    
     const tones = isDark ? {
       primary: Monet.getTone(p, 80), onPrimary: Monet.getTone(p, 20),
       primaryCont: Monet.getTone(p, 30), onPrimaryCont: Monet.getTone(p, 90),
@@ -75,6 +88,7 @@ export const Monet = {
       surfContLow: Monet.getTone(n, 96), surfCont: Monet.getTone(n, 94),
       surfContHigh: Monet.getTone(n, 92), surfContHighest: Monet.getTone(n, 90),
     };
+    
     const root = document.documentElement.style;
     for (const [key, value] of Object.entries(tones)) {
       let cssVar = '';
