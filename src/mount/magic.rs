@@ -21,6 +21,8 @@ use crate::{
     utils::{ensure_dir_exists, lgetfilecon, lsetfilecon},
 };
 
+use super::utils;
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::mount::try_umount::send_unmountable;
 
@@ -258,36 +260,11 @@ where
         }
         NodeFileType::Directory => {
             let mut create_tmpfs = !has_tmpfs && current.replace && current.module_path.is_some();
+
             if !has_tmpfs && !create_tmpfs {
-                for it in &mut current.children {
-                    let (name, node) = it;
-                    let real_path = path.join(name);
-                    let need = match node.file_type {
-                        NodeFileType::Symlink => true,
-                        NodeFileType::Whiteout => real_path.exists(),
-                        _ => {
-                            if let Ok(metadata) = real_path.symlink_metadata() {
-                                let file_type = NodeFileType::from_file_type(metadata.file_type())
-                                    .unwrap_or(NodeFileType::Whiteout);
-                                file_type != node.file_type || file_type == NodeFileType::Symlink
-                            } else {
-                                true
-                            }
-                        }
-                    };
-                    if need {
-                        if current.module_path.is_none() && !path.exists() {
-                            log::error!(
-                                "cannot create tmpfs on {}, ignore: {name}",
-                                path.display()
-                            );
-                            node.skip = true;
-                            continue;
-                        }
-                        create_tmpfs = true;
-                        break;
-                    }
-                }
+                let (new_node, new_create_tmpfs) = utils::check_tmpfs(&mut current, path.clone());
+                current = new_node;
+                create_tmpfs = new_create_tmpfs;
             }
 
             let has_tmpfs = has_tmpfs || create_tmpfs;
