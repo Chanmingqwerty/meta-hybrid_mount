@@ -5,10 +5,11 @@ use std::{
     os::unix::fs::symlink,
     path::{Path, PathBuf},
     process::Command,
-    sync::OnceLock,
+    sync::{Mutex, OnceLock},
     os::fd::RawFd,
     fmt as std_fmt,
     time::{SystemTime, UNIX_EPOCH},
+    collections::HashSet,
 };
 
 use anyhow::{Context, Result, bail};
@@ -310,6 +311,9 @@ const KSU_IOCTL_ADD_TRY_UMOUNT: u32 = 0x40004b12;
 
 static DRIVER_FD: OnceLock<RawFd> = OnceLock::new();
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+static SENT_UNMOUNTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
 #[repr(C)]
 struct KsuAddTryUmount {
     arg: u64,
@@ -342,8 +346,16 @@ where
     P: AsRef<Path>,
 {
     let path_ref = target.as_ref();
-    let path_str = path_ref.to_str().unwrap_or_default(); 
+    let path_str = path_ref.to_string_lossy().to_string(); 
     if path_str.is_empty() { return Ok(()); }
+
+    let cache = SENT_UNMOUNTS.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut set = cache.lock().unwrap();
+    if set.contains(&path_str) {
+        log::debug!("Unmount skipped (dedup): {}", path_str);
+        return Ok(());
+    }
+    set.insert(path_str.clone());
 
     let path = CString::new(path_str)?;
     let cmd = KsuAddTryUmount {

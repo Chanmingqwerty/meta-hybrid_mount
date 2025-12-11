@@ -23,7 +23,7 @@ use crate::{
 };
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use crate::mount::try_umount::send_unmountable;
+use crate::utils::send_unmountable;
 
 const ROOT_PARTITIONS: [&str; 4] = [
     "vendor",
