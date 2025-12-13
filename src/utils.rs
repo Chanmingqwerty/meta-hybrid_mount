@@ -295,10 +295,33 @@ pub fn ensure_temp_dir(temp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+const K: u32 = b'K' as u32;
+
+const _IOC_NRBITS: u32 = 8;
+const _IOC_TYPEBITS: u32 = 8;
+const _IOC_SIZEBITS: u32 = 14;
+const _IOC_DIRBITS: u32 = 2;
+
+const _IOC_NRSHIFT: u32 = 0;
+const _IOC_TYPESHIFT: u32 = _IOC_NRSHIFT + _IOC_NRBITS;
+const _IOC_SIZESHIFT: u32 = _IOC_TYPESHIFT + _IOC_TYPEBITS;
+const _IOC_DIRSHIFT: u32 = _IOC_SIZESHIFT + _IOC_SIZEBITS;
+
+const _IOC_WRITE: u32 = 1;
+
+const fn _ioc(dir: u32, type_: u32, nr: u32, size: u32) -> u32 {
+    (dir << _IOC_DIRSHIFT) | (type_ << _IOC_TYPESHIFT) | (nr << _IOC_NRSHIFT) | (size << _IOC_SIZESHIFT)
+}
+
+const fn _iow(type_: u32, nr: u32, size: u32) -> u32 {
+    _ioc(_IOC_WRITE, type_, nr, size)
+}
+
 const KSU_INSTALL_MAGIC1: u32 = 0xDEADBEEF;
 const KSU_INSTALL_MAGIC2: u32 = 0xCAFEBABE;
 const KSU_IOCTL_NUKE_EXT4_SYSFS: u32 = 0x40004b11; 
-const KSU_IOCTL_ADD_TRY_UMOUNT: u32 = 0x40004b12; 
+const KSU_IOCTL_ADD_TRY_UMOUNT: i32 = _iow(K, 18, 0) as i32;
+
 static DRIVER_FD: OnceLock<RawFd> = OnceLock::new();
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
