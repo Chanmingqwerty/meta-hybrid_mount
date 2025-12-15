@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::ffi::{CStr, CString};
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
@@ -77,7 +76,6 @@ fn ioc_add_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 1, HymoIoctlArg)
 #[allow(dead_code)]
 fn ioc_del_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 2, HymoIoctlArg) as libc::c_int }
 fn ioc_hide_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 3, HymoIoctlArg) as libc::c_int }
-fn ioc_inject_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 4, HymoIoctlArg) as libc::c_int }
 fn ioc_clear_all() -> libc::c_int { _IO!(HYMO_IOC_MAGIC as u32, 5) as libc::c_int }
 fn ioc_get_version() -> libc::c_int { _IOR!(HYMO_IOC_MAGIC as u32, 6, libc::c_int) as libc::c_int }
 #[allow(dead_code)]
@@ -208,28 +206,6 @@ impl HymoFs {
         Ok(())
     }
 
-    pub fn inject_dir(dir: &str) -> Result<()> {
-        debug!("HymoFS: INJECT_DIR dir='{}'", dir);
-        let file = Self::open_dev()?;
-        let c_dir = CString::new(dir)?;
-        
-        let arg = HymoIoctlArg {
-            src: c_dir.as_ptr(),
-            target: std::ptr::null(),
-            r#type: 0,
-        };
-
-        let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_inject_rule(), &arg)
-        };
-
-        if ret < 0 {
-            let err = std::io::Error::last_os_error();
-            anyhow::bail!("HymoFS inject_dir failed: {}", err);
-        }
-        Ok(())
-    }
-
     #[allow(dead_code)]
     pub fn list_active_rules() -> Result<String> {
         let file = Self::open_dev()?;
@@ -260,7 +236,6 @@ impl HymoFs {
 
         debug!("HymoFS: Scanning module dir: {} -> {}", module_dir.display(), target_base.display());
 
-        let mut injected_dirs = HashSet::new();
         let mut pending_ops = Vec::new();
 
         for entry in WalkDir::new(module_dir).min_depth(1) {
@@ -281,25 +256,13 @@ impl HymoFs {
             let file_type = entry.file_type();
 
             if file_type.is_file() || file_type.is_symlink() {
-                if let Some(parent) = target_path.parent() {
-                    injected_dirs.insert(parent.to_string_lossy().to_string());
-                }
                 pending_ops.push((true, target_path, current_path));
             } else if file_type.is_char_device() {
                 if let Ok(metadata) = entry.metadata() {
                     if metadata.rdev() == 0 {
-                        if let Some(parent) = target_path.parent() {
-                            injected_dirs.insert(parent.to_string_lossy().to_string());
-                        }
                         pending_ops.push((false, target_path, current_path));
                     }
                 }
-            }
-        }
-
-        for dir in injected_dirs {
-            if let Err(e) = Self::inject_dir(&dir) {
-                 debug!("HymoFS: Inject dir '{}' warning: {}", dir, e);
             }
         }
 
