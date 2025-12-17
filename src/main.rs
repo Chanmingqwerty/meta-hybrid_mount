@@ -62,7 +62,7 @@ fn check_zygisksu_enforce_status() -> bool {
         .unwrap_or(false)
 }
 
-fn run() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     if let Some(command) = &cli.command {
