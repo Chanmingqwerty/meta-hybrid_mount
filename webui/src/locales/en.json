@@ -12,14 +12,19 @@
     "rebootTitle": "Reboot System?",
     "rebootConfirm": "Are you sure you want to reboot the device?",
     "reboot": "Reboot",
-    "cancel": "Cancel"
-   },
+    "cancel": "Cancel",
+    "refresh": "Refresh",
+    "confirm": "Confirm",
+    "saving_btn": "Saving..."
+  },
   "tabs": {
     "status": "Status",
     "config": "Config",
     "modules": "Modules",
     "logs": "Logs",
-    "info": "Info"
+    "info": "Info",
+    "granary": "Granary",
+    "winnowing": "Winnowing"
   },
   "status": {
     "storageTitle": "Storage",
@@ -35,7 +40,12 @@
     "mountBase": "Mount Base",
     "activePartitions": "Active Partitions",
     "health": "System Health",
-    "healthy": "All checks passed. System is healthy."
+    "healthy": "All checks passed. System is healthy.",
+    "diagInfo": "Info",
+    "diagWarning": "Warning",
+    "diagCritical": "Critical",
+    "hymofsActive": "Active",
+    "hymofsNotDetected": "Not Detected"
   },
   "config": {
     "title": "Configuration",
@@ -147,5 +157,34 @@
     "loading": "Loading contributors...",
     "loadFail": "Failed to load (API Rate Limit)",
     "noBio": "No bio available"
+  },
+  "granary": {
+    "title": "Granary",
+    "loadError": "Failed to load Granary",
+    "restoreSuccess": "Restored successfully",
+    "deleteSuccess": "Deleted successfully",
+    "createSuccess": "Backup created",
+    "manualBackup": "Manual Backup",
+    "dialogRestoreTitle": "Restore Snapshot",
+    "dialogRestoreContent": "Restoring {label} will overwrite current configuration.",
+    "restore": "Restore",
+    "dialogDeleteTitle": "Delete Snapshot",
+    "dialogDeleteContent": "Delete {label} permanently?",
+    "delete": "Delete",
+    "dialogCreateTitle": "Create Backup",
+    "dialogCreateLabel": "Note",
+    "emptyTitle": "Granary is Empty",
+    "emptyDesc": "No snapshots found.",
+    "restoreAction": "Restore Snapshot",
+    "restoring": "Restoring...",
+    "create": "Create Backup"
+  },
+  "winnowing": {
+    "title": "Winnowing",
+    "searchPlaceholder": "Search paths...",
+    "emptyTitle": "All Clear",
+    "emptyDesc": "No conflicts detected.",
+    "conflictPath": "Conflict Path",
+    "selectProvider": "Select Provider"
   }
 }

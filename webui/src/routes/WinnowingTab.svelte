@@ -1,46 +1,51 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fade, slide } from 'svelte/transition';
   import { API } from '../lib/api';
   import { store } from '../lib/store.svelte';
   import { ICONS } from '../lib/constants';
   import type { ConflictEntry } from '../lib/types';
   import Skeleton from '../components/Skeleton.svelte';
+  import BottomActions from '../components/BottomActions.svelte';
   import './WinnowingTab.css';
 
-  // Material Web Imports
   import '@material/web/textfield/outlined-text-field.js';
   import '@material/web/chips/chip-set.js';
   import '@material/web/chips/filter-chip.js';
   import '@material/web/icon/icon.js';
+  import '@material/web/divider/divider.js';
+  import '@material/web/iconbutton/filled-tonal-icon-button.js';
 
   let conflicts = $state<ConflictEntry[]>([]);
   let loading = $state(true);
   let searchTerm = $state("");
 
+  const L_W = $derived(store.L.winnowing || {});
+  const L_C = $derived(store.L.common || {});
+
   async function loadData() {
     loading = true;
     try {
       conflicts = await API.getConflicts();
+      if (store.conflicts.length !== conflicts.length) {
+          store.loadConflicts(); 
+      }
     } catch (e) {
-      console.error(e);
-      store.showToast("Failed to load conflicts", "error");
+      store.showToast(store.L.modules?.conflictError || "Failed to load", "error");
     } finally {
       loading = false;
     }
   }
 
   async function selectWinner(item: ConflictEntry, moduleId: string) {
-    // Optimistic Update
     const idx = conflicts.findIndex(c => c.path === item.path);
     if (idx !== -1) {
       conflicts[idx].selected = moduleId;
       conflicts[idx].is_forced = true;
     }
-    
     try {
       await API.setWinnowingRule(item.path, moduleId);
     } catch(e) {
-      console.error(e);
       store.showToast("Failed to set rule", "error");
     }
   }
@@ -52,62 +57,75 @@
   onMount(loadData);
 </script>
 
-<div class="winnow-container">
-  <div class="header">
-    <h2>{store.L.tabs.winnowing || 'Winnowing'}</h2>
-    <p class="desc">{store.L.common.path || 'Conflict Resolution'}</p>
-    
-    <div class="search-section">
+<div class="winnow-page">
+  <div class="search-box">
       <md-outlined-text-field
-        label={store.L.modules.searchPlaceholder || "Search paths..."}
+        placeholder={L_W.searchPlaceholder || "Search paths..."}
         value={searchTerm}
         oninput={(e: Event) => searchTerm = (e.target as HTMLInputElement).value}
         class="full-width-field"
       >
         <md-icon slot="leading-icon"><svg viewBox="0 0 24 24"><path d={ICONS.search} /></svg></md-icon>
       </md-outlined-text-field>
-    </div>
   </div>
 
   {#if loading}
-    {#each Array(4) as _}
-        <div style="margin-bottom: 0.8rem;">
-            <Skeleton height="100px" borderRadius="12px" />
-        </div>
-    {/each}
+    <div class="list-wrapper">
+        {#each Array(4) as _}
+            <div class="conflict-card skeleton-card">
+                 <Skeleton width="100%" height="100px" borderRadius="16px"/>
+            </div>
+        {/each}
+    </div>
   {:else if conflicts.length === 0}
-    <div class="clean-state">
-      <span class="clean-icon">🌾</span>
-      <h3>No Conflicts Detected</h3>
-      <p>{store.L.status.healthy || "System is clean."}</p>
+    <div class="clean-state" in:fade>
+      <div class="clean-icon-circle">
+          <md-icon class="clean-icon"><svg viewBox="0 0 24 24"><path d={ICONS.check} /></svg></md-icon>
+      </div>
+      <h3>{L_W.emptyTitle || 'All Clear'}</h3>
+      <p>{L_W.emptyDesc || 'No conflicts detected.'}</p>
     </div>
   {:else}
     <div class="conflict-list">
-      {#each filteredConflicts as item}
-        <div class="conflict-card" class:forced={item.is_forced}>
-          <div class="path-section">
-            <div class="path-icon">
-              <md-icon><svg viewBox="0 0 24 24"><path d={ICONS.description} /></svg></md-icon>
-            </div>
-            <div class="path-text" title={item.path}>
-              {item.path}
+      {#each filteredConflicts as item (item.path)}
+        <div class="conflict-card" class:forced={item.is_forced} transition:slide={{ axis: 'y' }}>
+          <div class="card-header">
+            <md-icon class="file-icon"><svg viewBox="0 0 24 24"><path d={ICONS.description} /></svg></md-icon>
+            <div class="path-info">
+                <span class="path-label">{L_W.conflictPath || 'Conflict Path'}</span>
+                <span class="path-text" title={item.path}>{item.path}</span>
             </div>
           </div>
           
-          <md-chip-set class="chip-group">
-            {#each item.contenders as modId}
-              <md-filter-chip 
-                label={modId}
-                selected={item.selected === modId}
-                onclick={() => selectWinner(item, modId)}
-                role="button"
-                tabindex="0"
-                onkeydown={() => {}}
-              ></md-filter-chip>
-            {/each}
-          </md-chip-set>
+          <md-divider></md-divider>
+
+          <div class="card-body">
+              <span class="selection-label">{L_W.selectProvider || 'Select Provider'}:</span>
+              <md-chip-set>
+                {#each item.contenders as modId}
+                  <md-filter-chip 
+                    label={modId}
+                    selected={item.selected === modId}
+                    onclick={() => selectWinner(item, modId)}
+                    role="button" tabindex="0" onkeydown={() => {}}
+                  ></md-filter-chip>
+                {/each}
+              </md-chip-set>
+          </div>
         </div>
       {/each}
     </div>
   {/if}
 </div>
+
+<BottomActions>
+    <div class="spacer"></div>
+    <md-filled-tonal-icon-button 
+      onclick={loadData} 
+      disabled={loading}
+      title={L_C.refresh || "Refresh"}
+      role="button" tabindex="0" onkeydown={() => {}}
+    >
+      <md-icon><svg viewBox="0 0 24 24"><path d={ICONS.refresh} /></svg></md-icon>
+    </md-filled-tonal-icon-button>
+</BottomActions>

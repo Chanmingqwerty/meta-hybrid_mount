@@ -15,7 +15,9 @@
     "cancel": "取消",
     "used": "已用",
     "confirm": "确认",
-    "path": "路径"
+    "path": "路径",
+    "refresh": "刷新",
+    "saving_btn": "保存中..."
   },
   "tabs": {
     "status": "状态",
@@ -166,5 +168,34 @@
     "loading": "加载贡献者中...",
     "loadFail": "加载失败 (可能触发 API 限制)",
     "noBio": "这位开发者很懒，什么都没写"
+  },
+  "granary": {
+    "title": "粮仓",
+    "loadError": "加载粮仓失败",
+    "restoreSuccess": "恢复成功，请重启",
+    "deleteSuccess": "已删除",
+    "createSuccess": "备份已创建",
+    "manualBackup": "手动备份",
+    "dialogRestoreTitle": "恢复快照",
+    "dialogRestoreContent": "恢复到 {label} 将覆盖当前配置。",
+    "restore": "恢复",
+    "dialogDeleteTitle": "删除快照",
+    "dialogDeleteContent": "确定要永久删除 {label} 吗？",
+    "delete": "删除",
+    "dialogCreateTitle": "新建备份",
+    "dialogCreateLabel": "备注",
+    "emptyTitle": "粮仓空空如也",
+    "emptyDesc": "暂无配置快照。",
+    "restoreAction": "恢复此快照",
+    "restoring": "恢复中...",
+    "create": "新建备份"
+  },
+  "winnowing": {
+    "title": "风选",
+    "searchPlaceholder": "搜索路径...",
+    "emptyTitle": "一尘不染",
+    "emptyDesc": "未检测到文件冲突。",
+    "conflictPath": "冲突路径",
+    "selectProvider": "选择提供者"
   }
 }

@@ -23,7 +23,6 @@ try {
 }
 
 const shouldUseMock = import.meta.env.DEV || !ksuExec;
-console.log(`[API Init] Mode: ${shouldUseMock ? '🛠️ MOCK (Dev/Browser)' : '🚀 REAL (Device)'}`);
 
 function formatBytes(bytes: number, decimals = 2): string {
   if (!+bytes) return '0 B';
@@ -53,7 +52,32 @@ function stringToHex(str: string): string {
   return hex;
 }
 
-const RealAPI = {
+// Define the API interface explicitly to satisfy TypeScript
+interface AppAPI {
+  loadConfig: () => Promise<AppConfig>;
+  saveConfig: (config: AppConfig) => Promise<void>;
+  resetConfig: () => Promise<void>;
+  scanModules: (path?: string) => Promise<Module[]>;
+  saveModuleRules: (moduleId: string, rules: ModuleRules) => Promise<void>;
+  saveModules: (modules: Module[]) => Promise<void>;
+  readLogs: (logPath?: string, lines?: number) => Promise<string>;
+  getStorageUsage: () => Promise<StorageStatus>;
+  getSystemInfo: () => Promise<SystemInfo>;
+  getDeviceStatus: () => Promise<DeviceInfo>;
+  getVersion: () => Promise<string>;
+  openLink: (url: string) => Promise<void>;
+  fetchSystemColor: () => Promise<string | null>;
+  getConflicts: () => Promise<ConflictEntry[]>;
+  getDiagnostics: () => Promise<DiagnosticIssue[]>;
+  reboot: () => Promise<void>;
+  getGranaryList: () => Promise<Silo[]>;
+  createSilo: (reason: string) => Promise<void>;
+  deleteSilo: (siloId: string) => Promise<void>;
+  restoreSilo: (siloId: string) => Promise<void>;
+  setWinnowingRule: (path: string, moduleId: string) => Promise<void>;
+}
+
+const RealAPI: AppAPI = {
   loadConfig: async (): Promise<AppConfig> => {
     if (!ksuExec) return DEFAULT_CONFIG;
     const cmd = `${PATHS.BINARY} show-config`;
@@ -62,14 +86,9 @@ const RealAPI = {
       if (errno === 0 && stdout) {
         const loaded = JSON.parse(stdout);
         return { ...DEFAULT_CONFIG, ...loaded };
-      } else {
-        console.warn("Config load returned non-zero or empty, using defaults");
-        return DEFAULT_CONFIG;
       }
-    } catch (e) {
-      console.error("Failed to load config from backend:", e);
-      return DEFAULT_CONFIG; 
-    }
+    } catch (e) {}
+    return DEFAULT_CONFIG;
   },
   saveConfig: async (config: AppConfig): Promise<void> => {
     if (!ksuExec) throw new Error("No KSU environment");
@@ -77,29 +96,21 @@ const RealAPI = {
     const hexPayload = stringToHex(jsonStr);
     const cmd = `${PATHS.BINARY} save-config --payload ${hexPayload}`;
     const { errno, stderr } = await ksuExec(cmd);
-    if (errno !== 0) {
-      throw new Error(`Failed to save config: ${stderr}`);
-    }
+    if (errno !== 0) throw new Error(`Failed to save config: ${stderr}`);
   },
   resetConfig: async (): Promise<void> => {
     if (!ksuExec) throw new Error("No KSU environment");
     const cmd = `${PATHS.BINARY} gen-config`;
     const { errno, stderr } = await ksuExec(cmd);
-    if (errno !== 0) {
-      throw new Error(`Failed to reset config: ${stderr}`);
-    }
+    if (errno !== 0) throw new Error(`Failed to reset config: ${stderr}`);
   },
   scanModules: async (path?: string): Promise<Module[]> => {
     if (!ksuExec) return [];
     const cmd = `${PATHS.BINARY} modules`;
     try {
       const { errno, stdout } = await ksuExec(cmd);
-      if (errno === 0 && stdout) {
-        return JSON.parse(stdout);
-      }
-    } catch (e) {
-      console.error("Module scan failed:", e);
-    }
+      if (errno === 0 && stdout) return JSON.parse(stdout);
+    } catch (e) {}
     return [];
   },
   saveModuleRules: async (moduleId: string, rules: ModuleRules): Promise<void> => {
@@ -108,20 +119,16 @@ const RealAPI = {
     const hexPayload = stringToHex(jsonStr);
     const cmd = `${PATHS.BINARY} save-rules --module "${moduleId}" --payload "${hexPayload}"`;
     const { errno, stderr } = await ksuExec(cmd);
-    if (errno !== 0) {
-      throw new Error(`Failed to save rules for ${moduleId}: ${stderr}`);
-    }
+    if (errno !== 0) throw new Error(`Failed to save rules: ${stderr}`);
   },
-  saveModules: async (modules: Module[]): Promise<void> => {
-    return; 
-  },
+  saveModules: async (modules: Module[]): Promise<void> => { return; },
   readLogs: async (logPath?: string, lines = 1000): Promise<string> => {
     if (!ksuExec) return "";
     const f = logPath || (PATHS as any).DAEMON_LOG || "/data/adb/meta-hybrid/daemon.log";
     const cmd = `[ -f "${f}" ] && tail -n ${lines} "${f}" || echo ""`;
     const { errno, stdout, stderr } = await ksuExec(cmd);
     if (errno === 0) return stdout || "";
-    throw new Error(stderr || "Log file not found or unreadable");
+    throw new Error(stderr || "Log file not found");
   },
   getStorageUsage: async (): Promise<StorageStatus> => {
     if (!ksuExec) return { size: '-', used: '-', percent: '0%', type: null, hymofs_available: false };
@@ -140,13 +147,11 @@ const RealAPI = {
           hymofs_version: state.hymofs_version
         };
       }
-    } catch (e) {
-      console.error("Storage check failed:", e);
-    }
+    } catch (e) {}
     return { size: '-', used: '-', percent: '0%', type: null, hymofs_available: false };
   },
   getSystemInfo: async (): Promise<SystemInfo> => {
-    if (!ksuExec) return { kernel: 'Unknown', selinux: 'Unknown', mountBase: 'Unknown', activeMounts: [] };
+    if (!ksuExec) return { kernel: '-', selinux: '-', mountBase: '-', activeMounts: [] };
     try {
       const cmdSys = `echo "KERNEL:$(uname -r)"; echo "SELINUX:$(getenforce)"`;
       const { errno: errSys, stdout: outSys } = await ksuExec(cmdSys);
@@ -157,87 +162,51 @@ const RealAPI = {
           else if (line.startsWith('SELINUX:')) info.selinux = line.substring(8).trim();
         });
       }
-      
-      const cmdZygisk = `[ -f "/data/adb/zygisksu/denylist_enforce" ] && cat "/data/adb/zygisksu/denylist_enforce" || echo "0"`;
-      const { errno: errZygisk, stdout: outZygisk } = await ksuExec(cmdZygisk);
-      if (errZygisk === 0) {
-          info.zygisksuEnforce = outZygisk.trim();
-      }
-
       const stateFile = (PATHS as any).DAEMON_STATE || "/data/adb/meta-hybrid/run/daemon_state.json";
-      const cmdState = `cat "${stateFile}"`;
-      const { errno: errState, stdout: outState } = await ksuExec(cmdState);
+      const { errno: errState, stdout: outState } = await ksuExec(`cat "${stateFile}"`);
       if (errState === 0 && outState) {
         try {
           const state = JSON.parse(outState);
           info.mountBase = state.mount_point || 'Unknown';
-          if (Array.isArray(state.active_mounts)) {
-            info.activeMounts = state.active_mounts;
-          }
-        } catch (e) {
-          console.error("Failed to parse daemon state JSON", e);
-        }
-      } else {
-          const mntPath = (PATHS as any).IMAGE_MNT || "/data/adb/meta-hybrid/img_mnt";
-          const m = await ksuExec(`mount | grep "${mntPath}" | head -n 1`);
-          if (m.errno === 0 && m.stdout) {
-              const parts = m.stdout.split(' ');
-              if (parts.length > 2) info.mountBase = parts[2]; 
-          }
+          info.activeMounts = state.active_mounts || [];
+        } catch {}
       }
       return info;
     } catch (e) {
-      console.error("System info check failed:", e);
-      return { kernel: 'Unknown', selinux: 'Unknown', mountBase: 'Unknown', activeMounts: [] };
+      return { kernel: '-', selinux: '-', mountBase: '-', activeMounts: [] };
     }
   },
   getDeviceStatus: async (): Promise<DeviceInfo> => {
-    let model = "Device";
-    let android = "14";
-    let kernel = "Unknown";
+    let model = "Device", android = "14", kernel = "Unknown";
     if (ksuExec) {
-        const p1 = await ksuExec('getprop ro.product.model');
-        if (p1.errno === 0) model = p1.stdout.trim();
-        const p2 = await ksuExec('getprop ro.build.version.release');
-        const p3 = await ksuExec('getprop ro.build.version.sdk');
-        if (p2.errno === 0) android = `${p2.stdout.trim()} (API ${p3.stdout.trim()})`;
-        const p4 = await ksuExec('uname -r');
-        if (p4.errno === 0) kernel = p4.stdout.trim();
+        try {
+            const p1 = await ksuExec('getprop ro.product.model');
+            if (p1.errno === 0) model = p1.stdout.trim();
+            const p2 = await ksuExec('getprop ro.build.version.release');
+            const p3 = await ksuExec('getprop ro.build.version.sdk');
+            if (p2.errno === 0) android = `${p2.stdout.trim()} (API ${p3.stdout.trim()})`;
+            const p4 = await ksuExec('uname -r');
+            if (p4.errno === 0) kernel = p4.stdout.trim();
+        } catch {}
     }
-    return {
-        model,
-        android,
-        kernel,
-        selinux: "Enforcing"
-    };
+    return { model, android, kernel, selinux: "Enforcing" };
   },
   getVersion: async (): Promise<string> => {
     if (!ksuExec) return APP_VERSION;
     try {
         const binPath = PATHS.BINARY;
         const moduleDir = binPath.substring(0, binPath.lastIndexOf('/'));
-        const propPath = `${moduleDir}/module.prop`;
-        const cmd = `grep "^version=" "${propPath}"`;
-        const { errno, stdout } = await ksuExec(cmd);
+        const { errno, stdout } = await ksuExec(`grep "^version=" "${moduleDir}/module.prop"`);
         if (errno === 0 && stdout) {
             const match = stdout.match(/^version=(.+)$/m);
-            if (match && match[1]) {
-                return match[1].trim();
-            }
+            if (match) return match[1].trim();
         }
-    } catch (e) {
-        console.error("Failed to read module version", e);
-    }
+    } catch {}
     return APP_VERSION;
   },
   openLink: async (url: string): Promise<void> => {
-    if (!ksuExec) {
-        window.open(url, '_blank');
-        return;
-    }
-    const safeUrl = url.replace(/"/g, '\\"');
-    const cmd = `am start -a android.intent.action.VIEW -d "${safeUrl}"`;
-    await ksuExec(cmd);
+    if (!ksuExec) { window.open(url, '_blank'); return; }
+    await ksuExec(`am start -a android.intent.action.VIEW -d "${url.replace(/"/g, '\\"')}"`);
   },
   fetchSystemColor: async (): Promise<string | null> => {
     if (!ksuExec) return null;
@@ -246,79 +215,59 @@ const RealAPI = {
       if (stdout) {
         const match = /["']?android\.theme\.customization\.system_palette["']?\s*:\s*["']?#?([0-9a-fA-F]{6,8})["']?/i.exec(stdout) || 
                       /["']?source_color["']?\s*:\s*["']?#?([0-9a-fA-F]{6,8})["']?/i.exec(stdout);
-        if (match && match[1]) {
-          let hex = match[1];
-          if (hex.length === 8) hex = hex.substring(2);
-          return '#' + hex;
-        }
+        if (match?.[1]) return '#' + (match[1].length === 8 ? match[1].substring(2) : match[1]);
       }
-    } catch (e) {}
+    } catch {}
     return null;
   },
   getConflicts: async (): Promise<ConflictEntry[]> => {
     if (!ksuExec) return [];
-    const cmd = `${PATHS.BINARY} conflicts`;
     try {
-        const { errno, stdout } = await ksuExec(cmd);
-        if (errno === 0 && stdout) {
-            return JSON.parse(stdout);
-        }
-    } catch(e) {
-        console.error("Failed to get conflicts:", e);
-    }
+        const { errno, stdout } = await ksuExec(`${PATHS.BINARY} conflicts`);
+        if (errno === 0 && stdout) return JSON.parse(stdout);
+    } catch {}
     return [];
   },
   getDiagnostics: async (): Promise<DiagnosticIssue[]> => {
       if (!ksuExec) return [];
-      const cmd = `${PATHS.BINARY} diagnostics`;
       try {
-          const { errno, stdout } = await ksuExec(cmd);
-          if (errno === 0 && stdout) {
-              return JSON.parse(stdout);
-          }
-      } catch(e) {
-          console.error("Failed to get diagnostics:", e);
-      }
+          const { errno, stdout } = await ksuExec(`${PATHS.BINARY} diagnostics`);
+          if (errno === 0 && stdout) return JSON.parse(stdout);
+      } catch {}
       return [];
   },
   reboot: async (): Promise<void> => {
     if (!ksuExec) return;
-    try {
-        await ksuExec('reboot');
-    } catch (e) {
-        console.error("Reboot failed", e);
-    }
+    await ksuExec('reboot');
   },
   getGranaryList: async (): Promise<Silo[]> => {
     if (!ksuExec) return [];
-    const cmd = `${PATHS.BINARY} hymo-action granary-list`;
     try {
-        const { errno, stdout } = await ksuExec(cmd);
-        if (errno === 0 && stdout) {
-            return JSON.parse(stdout);
-        }
-    } catch(e) {
-        console.error("Failed to list granary:", e);
-    }
+        const { errno, stdout } = await ksuExec(`${PATHS.BINARY} hymo-action granary-list`);
+        if (errno === 0 && stdout) return JSON.parse(stdout);
+    } catch {}
     return [];
+  },
+  createSilo: async (reason: string): Promise<void> => {
+    if (!ksuExec) return;
+    const { errno, stderr } = await ksuExec(`${PATHS.BINARY} hymo-action granary-create --value "${reason}"`);
+    if (errno !== 0) throw new Error(stderr);
+  },
+  deleteSilo: async (siloId: string): Promise<void> => {
+    if (!ksuExec) return;
+    const { errno, stderr } = await ksuExec(`${PATHS.BINARY} hymo-action granary-delete --value "${siloId}"`);
+    if (errno !== 0) throw new Error(stderr);
   },
   restoreSilo: async (siloId: string): Promise<void> => {
     if (!ksuExec) return;
-    const cmd = `${PATHS.BINARY} hymo-action granary-restore --value "${siloId}"`;
-    const { errno, stderr } = await ksuExec(cmd);
-    if (errno !== 0) {
-        throw new Error(`Restore failed: ${stderr}`);
-    }
+    const { errno, stderr } = await ksuExec(`${PATHS.BINARY} hymo-action granary-restore --value "${siloId}"`);
+    if (errno !== 0) throw new Error(stderr);
   },
   setWinnowingRule: async (path: string, moduleId: string): Promise<void> => {
     if (!ksuExec) return;
-    const val = `${path}:${moduleId}`;
-    const cmd = `${PATHS.BINARY} hymo-action winnow-set --value "${val}"`;
-    const { errno, stderr } = await ksuExec(cmd);
-    if (errno !== 0) {
-        throw new Error(`Winnow set failed: ${stderr}`);
-    }
+    const { errno, stderr } = await ksuExec(`${PATHS.BINARY} hymo-action winnow-set --value "${path}:${moduleId}"`);
+    if (errno !== 0) throw new Error(stderr);
   }
 };
 
-export const API = shouldUseMock ? MockAPI : RealAPI;
+export const API: AppAPI = shouldUseMock ? (MockAPI as unknown as AppAPI) : RealAPI;

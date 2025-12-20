@@ -13,6 +13,9 @@
   import WinnowingTab from './routes/WinnowingTab.svelte';
   import './app.css';
   import './layout.css';
+  
+  const TABS = ['status', 'config', 'modules', 'logs', 'granary', 'winnowing', 'info'];
+  
   let activeTab = $state('status');
   let dragOffset = $state(0);
   let isDragging = $state(false);
@@ -20,48 +23,57 @@
   let touchStartX = 0;
   let touchStartY = 0;
   let isReady = $state(false);
-  const TABS = ['status', 'granary', 'winnowing', 'config', 'modules', 'logs', 'info'];
+
   function switchTab(id: string) {
     activeTab = id;
   }
+  
   function handleTouchStart(e: TouchEvent) {
     touchStartX = e.changedTouches[0].screenX;
     touchStartY = e.changedTouches[0].screenY;
     isDragging = true;
     dragOffset = 0;
   }
+
   function handleTouchMove(e: TouchEvent) {
     if (!isDragging) return;
     const currentX = e.changedTouches[0].screenX;
     const currentY = e.changedTouches[0].screenY;
     let diffX = currentX - touchStartX;
     const diffY = currentY - touchStartY;
-    if (Math.abs(diffY) > Math.abs(diffX)) {
-      return;
-    }
+    
+    // Lock vertical scroll
+    if (Math.abs(diffY) > Math.abs(diffX)) return;
+    
     if (e.cancelable) e.preventDefault();
+
     const currentIndex = TABS.indexOf(activeTab);
+    // Resistance at edges
     if ((currentIndex === 0 && diffX > 0) || (currentIndex === TABS.length - 1 && diffX < 0)) {
       diffX = diffX / 3;
     }
     dragOffset = diffX;
   }
+
   function handleTouchEnd() {
     if (!isDragging) return;
     isDragging = false;
     const threshold = containerWidth * 0.33 || 80;
     const currentIndex = TABS.indexOf(activeTab);
     let nextIndex = currentIndex;
+
     if (dragOffset < -threshold && currentIndex < TABS.length - 1) {
       nextIndex = currentIndex + 1;
     } else if (dragOffset > threshold && currentIndex > 0) {
       nextIndex = currentIndex - 1;
     }
+
     if (nextIndex !== currentIndex) {
       switchTab(TABS[nextIndex]);
     }
     dragOffset = 0;
   }
+
   onMount(async () => {
     try {
       await store.init();
@@ -69,13 +81,15 @@
       isReady = true;
     }
   });
-  let baseTranslateX = $derived(TABS.indexOf(activeTab) * -14.28);
+
+  let baseTranslateX = $derived(TABS.indexOf(activeTab) * -(100 / TABS.length));
 </script>
+
 <div class="app-root">
   {#if !isReady}
-    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; gap: 16px;">
+    <div class="loading-container">
        <div class="spinner"></div>
-       <span style="opacity: 0.6;">Loading...</span>
+       <span class="loading-text">Loading...</span>
     </div>
   {:else}
     <TopBar />
@@ -89,20 +103,35 @@
            style:transform={`translateX(calc(${baseTranslateX}% + ${dragOffset}px))`}
            style:width={`${TABS.length * 100}%`}
            style:transition={isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.5, 1)'}>
+        
         <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><StatusTab /></div></div>
-        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><GranaryTab /></div></div>
-        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><WinnowingTab /></div></div>
         <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><ConfigTab /></div></div>
         <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><ModulesTab /></div></div>
         <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><LogsTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><GranaryTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><WinnowingTab /></div></div>
         <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><InfoTab /></div></div>
+        
       </div>
     </main>
     <NavBar {activeTab} onTabChange={switchTab} />
   {/if}
   <Toast />
 </div>
+
 <style>
+  .loading-container {
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh; 
+    flex-direction: column; 
+    gap: 16px;
+  }
+  .loading-text {
+    opacity: 0.6;
+    font-family: var(--md-ref-typeface-plain);
+  }
   .spinner {
     width: 40px;
     height: 40px;

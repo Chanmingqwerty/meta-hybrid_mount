@@ -7,14 +7,26 @@
     "language": "Idioma",
     "themeAuto": "Auto (Sistema)",
     "themeLight": "Modo Claro",
-    "themeDark": "Modo Oscuro"
+    "themeDark": "Modo Oscuro",
+    "saveSuccess": "Guardado exitosamente",
+    "rebootTitle": "Reiniciar",
+    "rebootConfirm": "¿Está seguro de que desea reiniciar?",
+    "reboot": "Reiniciar",
+    "cancel": "Cancelar",
+    "used": "Usado",
+    "confirm": "Confirmar",
+    "path": "Ruta",
+    "refresh": "Refrescar",
+    "saving_btn": "Guardando..."
   },
   "tabs": {
     "status": "Estado",
     "config": "Config",
     "modules": "Módulos",
     "logs": "Registros",
-    "info": "Info"
+    "info": "Info",
+    "granary": "Granero",
+    "winnowing": "Cribado"
   },
   "status": {
     "storageTitle": "Almacenamiento",
@@ -30,7 +42,12 @@
     "mountBase": "Base de montaje",
     "activePartitions": "Particiones Activas",
     "health": "Salud del Sistema",
-    "healthy": "Todo correcto. El sistema está saludable."
+    "healthy": "Todo correcto. El sistema está saludable.",
+    "hymofsActive": "Activo",
+    "hymofsNotDetected": "No detectado",
+    "diagInfo": "Info",
+    "diagWarning": "Aviso",
+    "diagCritical": "Crítico"
   },
   "config": {
     "title": "Configuración",
@@ -40,7 +57,11 @@
     "dryRun": "Modo de Prueba (Dry Run)",
     "forceExt4": "Forzar Modo Ext4",
     "enableNuke": "Activar Paw Pad (Oculto)",
-    "disableUmount": "Desactivar Separación de Espacio de Nombres",
+    "disableUmount": "Desactivar Umount",
+    "allowUmountCoexistence": "Permitir Coexistencia",
+    "coexistenceRequired": "Opción de coexistencia requerida",
+    "hymoStealth": "HymoFS Sigiloso",
+    "hymoDebug": "HymoFS Depuración",
     "moduleDir": "Dir. Módulos",
     "mountSource": "Fuente Montaje",
     "mountSourceDesc": "Espacio de nombres global (p. ej. KSU)",
@@ -50,12 +71,16 @@
     "reload": "Recargar",
     "save": "Guardar",
     "reset": "Restablecer a Auto",
+    "resetConfig": "Restablecer Config",
+    "resetConfigTitle": "¿Restablecer Config?",
+    "resetConfigConfirm": "Esto restablecerá toda la configuración. ¿Continuar?",
     "invalidPath": "Ruta inválida detectada",
     "loadSuccess": "Configuración cargada",
     "loadError": "Error al cargar config",
     "loadDefault": "Usando config por defecto",
     "saveSuccess": "Guardado exitosamente",
     "saveFailed": "Error al guardar",
+    "resetSuccess": "Restablecido",
     "webui": "Ajustes WebUI",
     "fixBottomNav": "Arreglar Nav. Inferior",
     "fixBottomNavOn": "Arreglo activado",
@@ -76,11 +101,31 @@
     "searchPlaceholder": "Buscar módulos...",
     "filterLabel": "Filtro:",
     "filterAll": "Todos",
+    "author": "Autor",
+    "unknown": "Desconocido",
+    "defaultMode": "Estrategia",
+    "pathRules": "Reglas de Ruta",
+    "addRule": "Añadir Regla",
+    "noRules": "Sin reglas",
+    "noDesc": "Sin descripción",
     "checkConflicts": "Comprobar Conflictos",
     "hideConflicts": "Ocultar Conflictos",
     "conflictsTitle": "Conflictos de Archivos",
     "noConflicts": "No se detectaron conflictos.",
-    "conflictError": "Fallo al comprobar"
+    "conflictError": "Fallo al comprobar",
+    "placeholder": "ej. system/fonts",
+    "modes": {
+      "auto": "OverlayFS",
+      "magic": "Magic Mount",
+      "hymo": "HymoFS",
+      "ignore": "Deshabilitar",
+      "short": {
+        "auto": "Overlay",
+        "magic": "Magic",
+        "hymo": "HymoFS",
+        "ignore": "Ignorar"
+      }
+    }
   },
   "logs": {
     "title": "Registros del Sistema",
@@ -114,5 +159,34 @@
     "loading": "Cargando colaboradores...",
     "loadFail": "Error al cargar (Límite de API)",
     "noBio": "Sin biografía disponible"
+  },
+  "granary": {
+    "title": "Granero",
+    "loadError": "Error al cargar",
+    "restoreSuccess": "Restaurado",
+    "deleteSuccess": "Eliminado",
+    "createSuccess": "Creado",
+    "manualBackup": "Copia manual",
+    "dialogRestoreTitle": "¿Restaurar?",
+    "dialogRestoreContent": "Restaurar {label} sobrescribirá la configuración.",
+    "restore": "Restaurar",
+    "dialogDeleteTitle": "¿Eliminar?",
+    "dialogDeleteContent": "¿Eliminar {label} permanentemente?",
+    "delete": "Eliminar",
+    "dialogCreateTitle": "Nueva Copia",
+    "dialogCreateLabel": "Nota",
+    "emptyTitle": "Vacío",
+    "emptyDesc": "No hay copias.",
+    "restoreAction": "Restaurar",
+    "restoring": "Restaurando...",
+    "create": "Crear"
+  },
+  "winnowing": {
+    "title": "Cribado",
+    "searchPlaceholder": "Buscar rutas...",
+    "emptyTitle": "Limpio",
+    "emptyDesc": "Sin conflictos.",
+    "conflictPath": "Ruta del conflicto",
+    "selectProvider": "Seleccionar"
   }
 }

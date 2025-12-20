@@ -7,14 +7,26 @@
     "language": "Язык",
     "themeAuto": "Авто (Система)",
     "themeLight": "Светлая тема",
-    "themeDark": "Темная тема"
+    "themeDark": "Темная тема",
+    "saveSuccess": "Сохранено",
+    "rebootTitle": "Перезагрузка",
+    "rebootConfirm": "Вы уверены, что хотите перезагрузить устройство?",
+    "reboot": "Перезагрузить",
+    "cancel": "Отмена",
+    "used": "Исп.",
+    "confirm": "ОК",
+    "path": "Путь",
+    "refresh": "Обновить",
+    "saving_btn": "Сохр..."
   },
   "tabs": {
     "status": "Статус",
     "config": "Конфиг",
     "modules": "Модули",
     "logs": "Логи",
-    "info": "Инфо"
+    "info": "Инфо",
+    "granary": "Архив",
+    "winnowing": "Отсев"
   },
   "status": {
     "storageTitle": "Хранилище",
@@ -30,7 +42,12 @@
     "mountBase": "База монтирования",
     "activePartitions": "Активные разделы",
     "health": "Здоровье системы",
-    "healthy": "Все проверки пройдены. Система в норме."
+    "healthy": "Все проверки пройдены. Система в норме.",
+    "hymofsActive": "Активен",
+    "hymofsNotDetected": "Не обнаружен",
+    "diagInfo": "Инфо",
+    "diagWarning": "Внимание",
+    "diagCritical": "Критично"
   },
   "config": {
     "title": "Конфигурация",
@@ -40,7 +57,11 @@
     "dryRun": "Пробный запуск (Dry Run)",
     "forceExt4": "Принудительный Ext4",
     "enableNuke": "Включить Paw Pad (Скрытность)",
-    "disableUmount": "Отключить разделение пространств имен",
+    "disableUmount": "Отключить Umount",
+    "allowUmountCoexistence": "Разрешить сосуществование",
+    "coexistenceRequired": "Требуется включить сосуществование",
+    "hymoStealth": "HymoFS Стелс",
+    "hymoDebug": "HymoFS Отладка",
     "moduleDir": "Путь модулей",
     "mountSource": "Источник монтирования",
     "mountSourceDesc": "Глобальное пространство имен (напр. KSU)",
@@ -50,12 +71,16 @@
     "reload": "Обновить",
     "save": "Сохранить",
     "reset": "Сбросить на Авто",
+    "resetConfig": "Сброс конфига",
+    "resetConfigTitle": "Сбросить настройки?",
+    "resetConfigConfirm": "Это действие сбросит все настройки бэкенда. Продолжить?",
     "invalidPath": "Обнаружен недопустимый путь",
     "loadSuccess": "Конфигурация загружена",
     "loadError": "Ошибка загрузки конфига",
     "loadDefault": "Конфиг по умолчанию",
     "saveSuccess": "Успешно сохранено",
     "saveFailed": "Ошибка сохранения",
+    "resetSuccess": "Настройки сброшены",
     "webui": "Настройки WebUI",
     "fixBottomNav": "Испр. навигации",
     "fixBottomNavOn": "Исправление вкл.",
@@ -76,11 +101,31 @@
     "searchPlaceholder": "Поиск модулей...",
     "filterLabel": "Фильтр:",
     "filterAll": "Все",
+    "author": "Автор",
+    "unknown": "Неизвестно",
+    "defaultMode": "Стратегия",
+    "pathRules": "Правила путей",
+    "addRule": "Добавить правило",
+    "noRules": "Нет правил",
+    "noDesc": "Нет описания",
     "checkConflicts": "Проверить конфликты",
     "hideConflicts": "Скрыть конфликты",
     "conflictsTitle": "Конфликты файлов",
     "noConflicts": "Конфликтов не обнаружено.",
-    "conflictError": "Ошибка проверки"
+    "conflictError": "Ошибка проверки",
+    "placeholder": "напр. system/fonts",
+    "modes": {
+      "auto": "OverlayFS",
+      "magic": "Magic Mount",
+      "hymo": "HymoFS",
+      "ignore": "Отключено",
+      "short": {
+        "auto": "Overlay",
+        "magic": "Magic",
+        "hymo": "HymoFS",
+        "ignore": "Ignore"
+      }
+    }
   },
   "logs": {
     "title": "Системные логи",
@@ -114,5 +159,34 @@
     "loading": "Загрузка участников...",
     "loadFail": "Ошибка загрузки (Лимит API)",
     "noBio": "Биография отсутствует"
+  },
+  "granary": {
+    "title": "Архив",
+    "loadError": "Ошибка загрузки",
+    "restoreSuccess": "Восстановлено",
+    "deleteSuccess": "Удалено",
+    "createSuccess": "Создано",
+    "manualBackup": "Ручной бэкап",
+    "dialogRestoreTitle": "Восстановить?",
+    "dialogRestoreContent": "Восстановление {label} перезапишет настройки.",
+    "restore": "Восстановить",
+    "dialogDeleteTitle": "Удалить?",
+    "dialogDeleteContent": "Удалить {label} безвозвратно?",
+    "delete": "Удалить",
+    "dialogCreateTitle": "Новый бэкап",
+    "dialogCreateLabel": "Заметка",
+    "emptyTitle": "Пусто",
+    "emptyDesc": "Снимков нет.",
+    "restoreAction": "Восстановить",
+    "restoring": "Загрузка...",
+    "create": "Создать"
+  },
+  "winnowing": {
+    "title": "Отсев",
+    "searchPlaceholder": "Поиск путей...",
+    "emptyTitle": "Чисто",
+    "emptyDesc": "Конфликтов нет.",
+    "conflictPath": "Путь конфликта",
+    "selectProvider": "Выбрать модуль"
   }
 }
