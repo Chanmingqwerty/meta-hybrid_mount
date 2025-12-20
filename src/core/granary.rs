@@ -13,11 +13,16 @@ pub struct Silo {
     pub label: String,
     pub reason: String,
     pub config_snapshot: Config,
+    #[serde(default)]
+    pub raw_config: Option<String>,
+    #[serde(default)]
+    pub raw_state: Option<String>,
 }
 
 const RATOON_COUNTER_FILE: &str = "/data/adb/meta-hybrid/ratoon_counter";
 const GRANARY_DIR: &str = "/data/adb/meta-hybrid/granary";
-const MAX_AUTO_SILOS: usize = 5;
+const CONFIG_PATH: &str = "/data/adb/meta-hybrid/config.toml";
+const STATE_PATH: &str = "/data/adb/meta-hybrid/state.json"; 
 
 pub fn engage_ratoon_protocol() -> Result<()> {
     let path = Path::new(RATOON_COUNTER_FILE);
@@ -69,20 +74,25 @@ pub fn create_silo(config: &Config, label: &str, reason: &str) -> Result<String>
     
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let id = format!("silo_{}", now);
-    
+    let raw_config = fs::read_to_string(CONFIG_PATH).ok();
+    let raw_state = fs::read_to_string(STATE_PATH).ok();
+
     let silo = Silo {
         id: id.clone(),
         timestamp: now,
         label: label.to_string(),
         reason: reason.to_string(),
         config_snapshot: config.clone(),
+        raw_config,
+        raw_state,
     };
 
     let file_path = Path::new(GRANARY_DIR).join(format!("{}.json", id));
     let json = serde_json::to_string_pretty(&silo)?;
     fs::write(&file_path, json)?;
-
-    prune_old_silos()?;
+    if let Err(e) = prune_silos(config) {
+        log::warn!("Failed to prune granary: {}", e);
+    }
 
     Ok(id)
 }
@@ -128,7 +138,20 @@ pub fn restore_silo(id: &str) -> Result<()> {
     let silo: Silo = serde_json::from_str(&content)?;
 
     log::info!(">> Restoring Silo: {} ({})", silo.id, silo.label);
-    silo.config_snapshot.save_to_file(crate::conf::config::CONFIG_FILE_DEFAULT)?;
+    if let Some(raw) = &silo.raw_config {
+        log::info!(">> Restoring config from RAW content (preserving comments)...");
+        fs::write(CONFIG_PATH, raw)?;
+    } else {
+        log::info!(">> Raw config missing, restoring from struct snapshot...");
+        let toml_str = toml::to_string(&silo.config_snapshot)?;
+        fs::write(CONFIG_PATH, toml_str)?;
+    }
+    if let Some(state) = &silo.raw_state {
+        log::info!(">> Restoring state from snapshot...");
+        fs::write(STATE_PATH, state)?;
+    } else {
+        log::warn!(">> No state snapshot found in this Silo. Skipping state restore.");
+    }
 
     Ok(())
 }
@@ -142,14 +165,45 @@ fn restore_latest_silo() -> Result<()> {
     }
 }
 
-fn prune_old_silos() -> Result<()> {
+fn prune_silos(config: &Config) -> Result<()> {
     let silos = list_silos()?;
-    if silos.len() > MAX_AUTO_SILOS {
-        for silo in &silos[MAX_AUTO_SILOS..] {
+    let max_count = config.granary.max_backups;
+    let retention_days = config.granary.retention_days;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+
+    let mut deleted_count = 0;
+
+    let expiration_ts = if retention_days > 0 {
+        now.saturating_sub(retention_days * 86400)
+    } else {
+        0
+    };
+
+    for (i, silo) in silos.iter().enumerate() {
+        let mut should_delete = false;
+
+        if max_count > 0 && i >= max_count {
+            should_delete = true;
+        }
+
+        if retention_days > 0 && silo.timestamp < expiration_ts && i > 0 {
+            should_delete = true;
+        }
+
+        if should_delete {
             let path = Path::new(GRANARY_DIR).join(format!("{}.json", silo.id));
-            fs::remove_file(path).ok();
+            if let Err(e) = fs::remove_file(&path) {
+                log::warn!("Failed to delete old silo {}: {}", silo.id, e);
+            } else {
+                deleted_count += 1;
+            }
         }
     }
+
+    if deleted_count > 0 {
+        log::info!("Granary Prune: Deleted {} old snapshots.", deleted_count);
+    }
+
     Ok(())
 }
 

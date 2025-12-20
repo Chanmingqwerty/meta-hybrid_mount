@@ -39,6 +39,26 @@ impl WinnowingTable {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GranaryConfig {
+    #[serde(default = "default_max_backups")]
+    pub max_backups: usize,
+    #[serde(default = "default_retention_days")]
+    pub retention_days: u64,
+}
+
+fn default_max_backups() -> usize { 20 }
+fn default_retention_days() -> u64 { 0 }
+
+impl Default for GranaryConfig {
+    fn default() -> Self {
+        Self {
+            max_backups: default_max_backups(),
+            retention_days: default_retention_days(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(default = "default_moduledir")]
     pub moduledir: PathBuf,
@@ -63,6 +83,8 @@ pub struct Config {
     pub hymofs_debug: bool,
     #[serde(default)]
     pub winnowing: WinnowingTable,
+    #[serde(default)]
+    pub granary: GranaryConfig,
 }
 
 fn default_moduledir() -> PathBuf {
@@ -109,6 +131,7 @@ impl Default for Config {
             hymofs_stealth: true,
             hymofs_debug: false,
             winnowing: WinnowingTable::default(),
+            granary: GranaryConfig::default(),
         }
     }
 }
