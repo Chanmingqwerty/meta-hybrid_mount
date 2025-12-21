@@ -90,7 +90,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python3 scripts/tg_notify.py "37" "Daily Tilling/日常耕作"
+          # Changed label to: CN (EN)
+          python3 scripts/tg_notify.py "37" "日常耕作 🌱 (Daily Tilling)"
 
       - name: Prepare Artifact
         run: |

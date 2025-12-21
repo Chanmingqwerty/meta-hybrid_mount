@@ -101,7 +101,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python3 scripts/tg_notify.py "6" "Harvest/丰收"
+          # Changed label to: CN (EN)
+          python3 scripts/tg_notify.py "6" "丰收 (Harvest)"
 
       - name: Generate Changelog
         id: meta
