@@ -3,7 +3,6 @@
   background-color: var(--md-sys-color-surface-container);
   border-top: none;
   box-shadow: none; 
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   padding-top: 16px;
   padding-left: 24px;
   padding-right: 24px;
@@ -12,6 +11,9 @@
   -ms-overflow-style: none;
   gap: 8px;
   z-index: 100;
+}
+.bottom-nav.fix-padding {
+  padding-bottom: calc(max(16px, var(--safe-area-inset-bottom, 0px)) + 48px);
 }
 .bottom-nav::-webkit-scrollbar {
   display: none;
