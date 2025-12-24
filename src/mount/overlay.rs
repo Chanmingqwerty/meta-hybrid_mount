@@ -17,6 +17,11 @@ use crate::utils::send_unmountable;
 
 const PAGE_LIMIT: usize = 4000;
 
+enum StashedMount {
+    Modern(OwnedFd),
+    Legacy(PathBuf),
+}
+
 struct StagedMountGuard {
     mounts: Vec<PathBuf>,
     committed: bool,
@@ -317,19 +322,36 @@ fn do_bind_mount(
 }
 
 pub fn bind_mount(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
-    do_bind_mount(
-        from,
-        to,
+    match do_bind_mount(
+        &from,
+        &to,
         #[cfg(any(target_os = "linux", target_os = "android"))]
         false,
-    )
+    ) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            mount(
+                from.as_ref(),
+                to.as_ref(),
+                "",
+                MountFlags::BIND | MountFlags::REC,
+                "",
+            )
+            .context("Legacy bind mount failed")?;
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            {
+                let _ = send_unmountable(to.as_ref());
+            }
+            Ok(())
+        }
+    }
 }
 
 fn mount_overlay_child(
     mount_point: &str,
     relative: &str,
     module_roots: &[String],
-    stock_fd: OwnedFd,
+    stock: StashedMount,
     #[cfg(any(target_os = "linux", target_os = "android"))] disable_umount: bool,
 ) -> Result<()> {
     let has_modification = module_roots.iter().any(|lower| {
@@ -338,14 +360,23 @@ fn mount_overlay_child(
     });
 
     if !has_modification {
-        move_mount(
-            stock_fd.as_fd(),
-            "",
-            CWD,
-            mount_point,
-            MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
-        )
-        .with_context(|| format!("move_mount failed to {}", mount_point))?;
+        match stock {
+            StashedMount::Modern(fd) => {
+                move_mount(
+                    fd.as_fd(),
+                    "",
+                    CWD,
+                    mount_point,
+                    MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
+                )
+                .with_context(|| format!("move_mount failed to {}", mount_point))?;
+            }
+            StashedMount::Legacy(path) => {
+                mount(&path, mount_point, "", MountFlags::MOVE, "")
+                    .with_context(|| format!("legacy move mount failed to {}", mount_point))?;
+                let _ = fs::remove_dir(path);
+            }
+        }
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
         if !disable_umount {
@@ -368,11 +399,14 @@ fn mount_overlay_child(
         return Ok(());
     }
 
-    let stock_root_magic_path = format!("/proc/self/fd/{}", stock_fd.as_raw_fd());
+    let lower_root = match &stock {
+        StashedMount::Modern(fd) => format!("/proc/self/fd/{}", fd.as_raw_fd()),
+        StashedMount::Legacy(path) => path.to_string_lossy().to_string(),
+    };
 
     if let Err(e) = mount_overlayfs(
         &lower_dirs,
-        &stock_root_magic_path,
+        &lower_root,
         None,
         None,
         mount_point,
@@ -383,19 +417,28 @@ fn mount_overlay_child(
             "failed to overlay child {mount_point}: {:#}, fallback to bind mount",
             e
         );
-        move_mount(
-            stock_fd.as_fd(),
-            "",
-            CWD,
-            mount_point,
-            MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
-        )
-        .with_context(|| format!("move_mount failed to {}", mount_point))?;
+        match stock {
+            StashedMount::Modern(fd) => {
+                move_mount(
+                    fd.as_fd(),
+                    "",
+                    CWD,
+                    mount_point,
+                    MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
+                )?;
+            }
+            StashedMount::Legacy(path) => {
+                mount(&path, mount_point, "", MountFlags::MOVE, "")?;
+                let _ = fs::remove_dir(path);
+            }
+        }
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
         if !disable_umount {
             let _ = send_unmountable(mount_point);
         }
+    } else if let StashedMount::Legacy(path) = stock {
+        let _ = fs::remove_dir(path);
     }
     Ok(())
 }
@@ -412,7 +455,6 @@ pub fn mount_overlay(
 
     let stock_root = format!("/proc/self/fd/{}", root_file.as_raw_fd());
 
-    // Auto-detect sub-mounts to preserve them (fix for linkerconfig crash)
     let mut all_child_mounts = Vec::new();
     match get_sub_mounts(target_root) {
         Ok(sub_mounts) => {
@@ -430,6 +472,8 @@ pub fn mount_overlay(
     }
 
     let mut stashed_mounts = Vec::new();
+    let stash_base = Path::new(RUN_DIR).join("stash");
+
     for mount_point in &all_child_mounts {
         let relative = mount_point.replacen(target_root, "", 1);
         let relative_clean = relative.trim_start_matches('/');
@@ -441,8 +485,40 @@ pub fn mount_overlay(
                 | OpenTreeFlags::OPEN_TREE_CLONE
                 | OpenTreeFlags::AT_RECURSIVE,
         ) {
-            Ok(fd) => stashed_mounts.push((mount_point.clone(), relative, fd)),
-            Err(e) => warn!("Failed to stash mount {}: {}", mount_point, e),
+            Ok(fd) => {
+                stashed_mounts.push((mount_point.clone(), relative, StashedMount::Modern(fd)))
+            }
+            Err(e) => {
+                warn!(
+                    "open_tree failed for {}: {}, falling back to legacy stash",
+                    mount_point, e
+                );
+                let stash_path = stash_base.join(relative_clean);
+                if let Err(err) = fs::create_dir_all(&stash_path) {
+                    warn!(
+                        "Failed to create stash dir {}: {}",
+                        stash_path.display(),
+                        err
+                    );
+                    continue;
+                }
+
+                if let Err(err) = mount(
+                    mount_point,
+                    &stash_path,
+                    "",
+                    MountFlags::BIND | MountFlags::REC,
+                    "",
+                ) {
+                    warn!("Legacy stash failed for {}: {}", mount_point, err);
+                    continue;
+                }
+                stashed_mounts.push((
+                    mount_point.clone(),
+                    relative,
+                    StashedMount::Legacy(stash_path),
+                ));
+            }
         }
     }
 
@@ -457,12 +533,12 @@ pub fn mount_overlay(
     )
     .with_context(|| format!("mount overlayfs for root {target_root} failed"))?;
 
-    for (mount_point, relative, stock_fd) in stashed_mounts {
+    for (mount_point, relative, stock) in stashed_mounts {
         if let Err(e) = mount_overlay_child(
             &mount_point,
             &relative,
             module_roots,
-            stock_fd,
+            stock,
             #[cfg(any(target_os = "linux", target_os = "android"))]
             disable_umount,
         ) {
