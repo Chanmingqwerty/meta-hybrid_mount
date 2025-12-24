@@ -184,10 +184,6 @@ fn main() -> Result<()> {
     log::info!(">> Initializing Meta-Hybrid Mount Daemon...");
     log::debug!("Process camouflaged as: {}", camouflage_name);
 
-    if let Ok(version) = std::fs::read_to_string("/proc/sys/kernel/osrelease") {
-        log::debug!("Kernel Version: {}", version.trim());
-    }
-
     if config.disable_umount {
         log::warn!("!! Umount is DISABLED via config.");
     }
