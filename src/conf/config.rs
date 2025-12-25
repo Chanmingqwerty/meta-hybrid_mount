@@ -68,6 +68,8 @@ pub struct Config {
     #[serde(default)]
     pub force_ext4: bool,
     #[serde(default)]
+    pub use_erofs: bool,
+    #[serde(default)]
     pub enable_nuke: bool,
     #[serde(default)]
     pub disable_umount: bool,
@@ -118,6 +120,7 @@ impl Default for Config {
             verbose: false,
             partitions: Vec::new(),
             force_ext4: false,
+            use_erofs: false,
             enable_nuke: false,
             disable_umount: false,
             allow_umount_coexistence: false,

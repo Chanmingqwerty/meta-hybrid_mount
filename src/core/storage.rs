@@ -15,12 +15,44 @@ use walkdir::WalkDir;
 
 use crate::{core::state::RuntimeState, defs, utils};
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use crate::utils::send_unmountable;
+
 const DEFAULT_SELINUX_CONTEXT: &str = "u:object_r:system_file:s0";
 const SELINUX_XATTR_KEY: &str = "security.selinux";
 
 pub struct StorageHandle {
     pub mount_point: PathBuf,
     pub mode: String,
+    pub backing_image: Option<PathBuf>,
+}
+
+impl StorageHandle {
+    pub fn commit(&mut self, disable_umount: bool) -> Result<()> {
+        if self.mode == "erofs_staging" {
+            let image_path = self
+                .backing_image
+                .as_ref()
+                .context("EROFS backing image path missing")?;
+
+            utils::create_erofs_image(&self.mount_point, image_path)
+                .context("Failed to pack EROFS image")?;
+
+            unmount(&self.mount_point, UnmountFlags::DETACH)
+                .context("Failed to unmount staging tmpfs")?;
+
+            utils::mount_erofs_image(image_path, &self.mount_point)
+                .context("Failed to mount finalized EROFS image")?;
+
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            if !disable_umount {
+                let _ = send_unmountable(&self.mount_point);
+            }
+
+            self.mode = "erofs".to_string();
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize)]
@@ -54,41 +86,70 @@ pub fn setup(
     img_path: &Path,
     moduledir: &Path,
     force_ext4: bool,
+    use_erofs: bool,
     mount_source: &str,
+    disable_umount: bool,
 ) -> Result<StorageHandle> {
     if utils::is_mounted(mnt_base) {
         let _ = unmount(mnt_base, UnmountFlags::DETACH);
     }
 
-    if !force_ext4 && try_setup_tmpfs(mnt_base, mount_source)? {
+    let try_hide = |path: &Path| {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        if !disable_umount {
+            let _ = send_unmountable(path);
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let _ = path;
+    };
+
+    if use_erofs && utils::is_erofs_supported() {
+        let erofs_path = img_path.with_extension("erofs");
+
+        utils::mount_tmpfs(mnt_base, mount_source)?;
+        try_hide(mnt_base);
+
         if img_path.exists() {
-            log::info!(
-                "Tmpfs mode active. removing unused image: {}",
-                img_path.display()
-            );
-            if let Err(e) = fs::remove_file(img_path) {
-                log::warn!("Failed to remove unused modules.img: {}", e);
-            }
+            let _ = fs::remove_file(img_path);
+        }
+
+        return Ok(StorageHandle {
+            mount_point: mnt_base.to_path_buf(),
+            mode: "erofs_staging".to_string(),
+            backing_image: Some(erofs_path),
+        });
+    }
+
+    if !force_ext4 && try_setup_tmpfs(mnt_base, mount_source)? {
+        try_hide(mnt_base);
+        if img_path.exists()
+            && let Err(e) = fs::remove_file(img_path)
+        {
+            log::warn!("Failed to remove unused modules.img: {}", e);
+        }
+
+        let erofs_path = img_path.with_extension("erofs");
+        if erofs_path.exists() {
+            let _ = fs::remove_file(erofs_path);
         }
 
         return Ok(StorageHandle {
             mount_point: mnt_base.to_path_buf(),
             mode: "tmpfs".to_string(),
+            backing_image: None,
         });
     }
 
-    setup_ext4_image(mnt_base, img_path, moduledir)
+    let handle = setup_ext4_image(mnt_base, img_path, moduledir)?;
+    try_hide(mnt_base);
+    Ok(handle)
 }
 
 fn try_setup_tmpfs(target: &Path, mount_source: &str) -> Result<bool> {
     if utils::mount_tmpfs(target, mount_source).is_ok() {
         if utils::is_overlay_xattr_supported(target) {
-            log::info!("Tmpfs mounted and supports xattrs (CONFIG_TMPFS_XATTR=y).");
             return Ok(true);
         } else {
-            log::warn!("Tmpfs mounted but XATTRs (trusted.*) are NOT supported.");
-            log::warn!(">> Your kernel likely lacks CONFIG_TMPFS_XATTR=y.");
-            log::warn!(">> Falling back to legacy Ext4 image mode.");
             let _ = unmount(target, UnmountFlags::DETACH);
         }
     }
@@ -115,6 +176,7 @@ fn setup_ext4_image(target: &Path, img_path: &Path, moduledir: &Path) -> Result<
     Ok(StorageHandle {
         mount_point: target.to_path_buf(),
         mode: "ext4".to_string(),
+        backing_image: Some(img_path.to_path_buf()),
     })
 }
 
@@ -135,12 +197,6 @@ fn create_image(path: &Path, moduledir: &Path) -> Result<()> {
     let aligned_size = target_raw.div_ceil(GRANULARITY) * GRANULARITY;
 
     let size_str = format!("{}", aligned_size);
-
-    log::info!(
-        "Creating dynamic modules.img. Modules: {} bytes. Target: {} bytes (Granularity: 5MB)",
-        total_size,
-        aligned_size
-    );
 
     let status = Command::new("truncate")
         .arg("-s")

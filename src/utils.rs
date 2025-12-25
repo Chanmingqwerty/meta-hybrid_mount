@@ -3,11 +3,11 @@ use std::{
     ffi::CString,
     fmt as std_fmt,
     fs::{self, File, create_dir_all, remove_dir_all, remove_file, write},
-    io::Write,
+    io::{BufRead, Write},
     os::fd::RawFd,
-    os::unix::fs::symlink,
+    os::unix::fs::{PermissionsExt, symlink},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -532,4 +532,71 @@ pub fn ksu_nuke_sysfs(target: &str) -> Result<()> {
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 pub fn ksu_nuke_sysfs(_target: &str) -> Result<()> {
     bail!("Not supported on this OS")
+}
+
+pub fn is_erofs_supported() -> bool {
+    fs::read_to_string("/proc/filesystems")
+        .map(|content| content.contains("erofs"))
+        .unwrap_or(false)
+}
+
+pub fn create_erofs_image(src_dir: &Path, image_path: &Path) -> Result<()> {
+    let mkfs_bin = Path::new("/data/adb/metamodule/tools/mkfs.erofs");
+    let cmd_name = if mkfs_bin.exists() {
+        mkfs_bin.as_os_str()
+    } else {
+        std::ffi::OsStr::new("mkfs.erofs")
+    };
+
+    log::info!("Packing EROFS image: {}", image_path.display());
+
+    let output = Command::new(cmd_name)
+        .arg("-z")
+        .arg("lz4hc")
+        .arg(image_path)
+        .arg(src_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .context("Failed to execute mkfs.erofs")?;
+
+    let log_lines = |bytes: &[u8]| {
+        let s = String::from_utf8_lossy(bytes);
+        for line in s.lines() {
+            if !line.trim().is_empty() {
+                log::debug!("{}", line);
+            }
+        }
+    };
+
+    log_lines(&output.stdout);
+    log_lines(&output.stderr);
+
+    if !output.status.success() {
+        bail!("Failed to create EROFS image");
+    }
+
+    log::info!("Build Completed.");
+
+    let _ = fs::set_permissions(image_path, fs::Permissions::from_mode(0o644));
+    lsetfilecon(image_path, "u:object_r:ksu_file:s0")?;
+
+    Ok(())
+}
+
+pub fn mount_erofs_image(image_path: &Path, target: &Path) -> Result<()> {
+    ensure_dir_exists(target)?;
+    lsetfilecon(image_path, "u:object_r:ksu_file:s0").ok();
+
+    let status = Command::new("mount")
+        .args(["-t", "erofs", "-o", "loop,ro,nodev,noatime"])
+        .arg(image_path)
+        .arg(target)
+        .status()
+        .context("Failed to execute mount command for EROFS")?;
+
+    if !status.success() {
+        bail!("EROFS Mount command failed");
+    }
+    Ok(())
 }

@@ -14,8 +14,6 @@ use anyhow::Result;
 
 use crate::{conf::config::Config, utils};
 
-// --- Typestate States ---
-
 pub struct Init;
 
 pub struct StorageReady {
@@ -64,7 +62,9 @@ impl OryzaEngine<Init> {
             img_path,
             &self.config.moduledir,
             self.config.force_ext4,
+            self.config.use_erofs,
             &self.config.mountsource,
+            self.config.disable_umount,
         )?;
 
         log::info!(">> Storage Backend: [{}]", handle.mode.to_uppercase());
@@ -77,7 +77,7 @@ impl OryzaEngine<Init> {
 }
 
 impl OryzaEngine<StorageReady> {
-    pub fn scan_and_sync(self) -> Result<OryzaEngine<ModulesReady>> {
+    pub fn scan_and_sync(mut self) -> Result<OryzaEngine<ModulesReady>> {
         let modules = inventory::scan(&self.config.moduledir, &self.config)?;
         log::info!(
             ">> Inventory Scan: Found {} enabled modules.",
@@ -85,6 +85,8 @@ impl OryzaEngine<StorageReady> {
         );
 
         sync::perform_sync(&modules, &self.state.handle.mount_point)?;
+
+        self.state.handle.commit(self.config.disable_umount)?;
 
         Ok(OryzaEngine {
             config: self.config,
