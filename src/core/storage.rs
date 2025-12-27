@@ -1,3 +1,6 @@
+// Copyright 2025 Meta-Hybrid Mount Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::{
     ffi::CString,
     fs,
@@ -16,9 +19,10 @@ use walkdir::WalkDir;
 use crate::{core::state::RuntimeState, defs, utils};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use crate::utils::send_unmountable;
+use crate::try_umount::send_unmountable;
 
 const DEFAULT_SELINUX_CONTEXT: &str = "u:object_r:system_file:s0";
+
 const SELINUX_XATTR_KEY: &str = "security.selinux";
 
 pub struct StorageHandle {
@@ -51,6 +55,7 @@ impl StorageHandle {
 
             self.mode = "erofs".to_string();
         }
+
         Ok(())
     }
 }
@@ -68,13 +73,17 @@ struct StorageStatus {
 pub fn get_usage(path: &Path) -> (u64, u64, u8) {
     if let Ok(stat) = rustix::fs::statvfs(path) {
         let total = stat.f_blocks * stat.f_frsize;
+
         let free = stat.f_bfree * stat.f_frsize;
+
         let used = total - free;
+
         let percent = if total > 0 {
             (used * 100 / total) as u8
         } else {
             0
         };
+
         (total, used, percent)
     } else {
         (0, 0, 0)
@@ -99,6 +108,7 @@ pub fn setup(
         if !disable_umount {
             let _ = send_unmountable(path);
         }
+
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let _ = path;
     };
@@ -107,6 +117,7 @@ pub fn setup(
         let erofs_path = img_path.with_extension("erofs");
 
         utils::mount_tmpfs(mnt_base, mount_source)?;
+
         try_hide(mnt_base);
 
         if img_path.exists() {
@@ -122,6 +133,7 @@ pub fn setup(
 
     if !force_ext4 && try_setup_tmpfs(mnt_base, mount_source)? {
         try_hide(mnt_base);
+
         if img_path.exists()
             && let Err(e) = fs::remove_file(img_path)
         {
@@ -129,6 +141,7 @@ pub fn setup(
         }
 
         let erofs_path = img_path.with_extension("erofs");
+
         if erofs_path.exists() {
             let _ = fs::remove_file(erofs_path);
         }
@@ -141,7 +154,9 @@ pub fn setup(
     }
 
     let handle = setup_ext4_image(mnt_base, img_path, moduledir)?;
+
     try_hide(mnt_base);
+
     Ok(handle)
 }
 
@@ -153,6 +168,7 @@ fn try_setup_tmpfs(target: &Path, mount_source: &str) -> Result<bool> {
             let _ = unmount(target, UnmountFlags::DETACH);
         }
     }
+
     Ok(false)
 }
 
@@ -161,6 +177,7 @@ fn setup_ext4_image(target: &Path, img_path: &Path, moduledir: &Path) -> Result<
         if let Some(parent) = img_path.parent() {
             fs::create_dir_all(parent)?;
         }
+
         create_image(img_path, moduledir).context("Failed to create modules.img")?;
     }
 
@@ -182,6 +199,7 @@ fn setup_ext4_image(target: &Path, img_path: &Path, moduledir: &Path) -> Result<
 
 fn create_image(path: &Path, moduledir: &Path) -> Result<()> {
     let mut total_size: u64 = 0;
+
     if moduledir.exists() {
         for entry in WalkDir::new(moduledir).into_iter().flatten() {
             if entry.metadata().map(|m| m.is_file()).unwrap_or(false) {
@@ -191,9 +209,11 @@ fn create_image(path: &Path, moduledir: &Path) -> Result<()> {
     }
 
     const OVERHEAD: u64 = 64 * 1024 * 1024;
+
     const GRANULARITY: u64 = 5 * 1024 * 1024;
 
     let target_raw = total_size + OVERHEAD;
+
     let aligned_size = target_raw.div_ceil(GRANULARITY) * GRANULARITY;
 
     let size_str = format!("{}", aligned_size);
@@ -203,6 +223,7 @@ fn create_image(path: &Path, moduledir: &Path) -> Result<()> {
         .arg(&size_str)
         .arg(path)
         .status()?;
+
     if !status.success() {
         bail!("Failed to allocate image file");
     }
@@ -212,6 +233,7 @@ fn create_image(path: &Path, moduledir: &Path) -> Result<()> {
         .arg("^has_journal")
         .arg(path)
         .status()?;
+
     if !status.success() {
         bail!("Failed to format image file");
     }
@@ -224,6 +246,7 @@ pub fn finalize_storage_permissions(target: &Path) {
     if let Err(e) = rustix::fs::chmod(target, Mode::from(0o755)) {
         log::warn!("Failed to chmod storage root: {}", e);
     }
+
     if let Err(e) = rustix::fs::chown(
         target,
         Some(rustix::fs::Uid::from_raw(0)),
@@ -231,6 +254,7 @@ pub fn finalize_storage_permissions(target: &Path) {
     ) {
         log::warn!("Failed to chown storage root: {}", e);
     }
+
     if let Err(e) = set_selinux_context(target, DEFAULT_SELINUX_CONTEXT) {
         log::warn!("Failed to set SELinux context: {}", e);
     }
@@ -238,6 +262,7 @@ pub fn finalize_storage_permissions(target: &Path) {
 
 fn set_selinux_context(path: &Path, context: &str) -> Result<()> {
     let c_path = CString::new(path.as_os_str().as_encoded_bytes())?;
+
     let c_val = CString::new(context)?;
 
     unsafe {
@@ -248,15 +273,18 @@ fn set_selinux_context(path: &Path, context: &str) -> Result<()> {
             c_val.as_bytes().len(),
             0,
         );
+
         if ret != 0 {
             bail!("lsetxattr failed");
         }
     }
+
     Ok(())
 }
 
 pub fn print_status() -> Result<()> {
     let state = RuntimeState::load().ok();
+
     let (mnt_base, expected_mode) = if let Some(ref s) = state {
         (s.mount_point.clone(), s.storage_mode.clone())
     } else {
@@ -264,8 +292,11 @@ pub fn print_status() -> Result<()> {
     };
 
     let mut mode = "unknown".to_string();
+
     let mut total = 0;
+
     let mut used = 0;
+
     let mut percent = 0;
 
     if utils::is_mounted(&mnt_base)
@@ -276,9 +307,13 @@ pub fn print_status() -> Result<()> {
         } else {
             "active".to_string()
         };
+
         total = stat.f_blocks * stat.f_frsize;
+
         let free = stat.f_bfree * stat.f_frsize;
+
         used = total - free;
+
         if total > 0 {
             percent = (used * 100 / total) as u8;
         }
@@ -293,5 +328,6 @@ pub fn print_status() -> Result<()> {
     };
 
     println!("{}", serde_json::to_string(&status)?);
+
     Ok(())
 }

@@ -1,3 +1,6 @@
+// Copyright 2025 Meta-Hybrid Mount Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::{
     collections::HashMap,
     fs,
@@ -30,6 +33,7 @@ pub struct ModuleRules {
 impl ModuleRules {
     pub fn load(module_dir: &Path, module_id: &str) -> Self {
         let mut rules = ModuleRules::default();
+
         let internal_config = module_dir.join("hybrid_rules.json");
 
         if internal_config.exists() {
@@ -43,6 +47,7 @@ impl ModuleRules {
         }
 
         let user_rules_dir = Path::new("/data/adb/meta-hybrid/rules");
+
         let user_config = user_rules_dir.join(format!("{}.json", module_id));
 
         if user_config.exists() {
@@ -50,6 +55,7 @@ impl ModuleRules {
                 Ok(content) => match serde_json::from_str::<ModuleRules>(&content) {
                     Ok(user_rules) => {
                         rules.default_mode = user_rules.default_mode;
+
                         rules.paths.extend(user_rules.paths);
                     }
                     Err(e) => log::warn!("Failed to parse user rules for '{}': {}", module_id, e),
@@ -65,6 +71,7 @@ impl ModuleRules {
         if let Some(mode) = self.paths.get(relative_path) {
             return mode.clone();
         }
+
         self.default_mode.clone()
     }
 }
@@ -87,13 +94,13 @@ pub fn scan(source_dir: &Path, _config: &config::Config) -> Result<Vec<Module>> 
         .into_par_iter()
         .filter_map(|entry| {
             let path = entry.path();
+
             if !path.is_dir() {
                 return None;
             }
 
             let id = entry.file_name().to_string_lossy().to_string();
 
-            // Centralized ignore list for system directories
             if matches!(
                 id.as_str(),
                 "meta-hybrid" | "lost+found" | ".git" | ".idea" | ".vscode"
@@ -119,5 +126,6 @@ pub fn scan(source_dir: &Path, _config: &config::Config) -> Result<Vec<Module>> 
         .collect();
 
     modules.sort_by(|a, b| b.id.cmp(&a.id));
+
     Ok(modules)
 }

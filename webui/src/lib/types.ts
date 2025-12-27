@@ -1,3 +1,8 @@
+/**
+ * Copyright 2025 Meta-Hybrid Mount Authors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 export interface GranaryConfig {
   max_backups: number;
   retention_days: number;
@@ -45,6 +50,7 @@ export interface StorageStatus {
   percent: string;
   type: 'tmpfs' | 'ext4' | 'erofs' | 'unknown' | null;
   error?: string;
+  hymofs_available?: boolean;
 }
 
 export interface SystemInfo {

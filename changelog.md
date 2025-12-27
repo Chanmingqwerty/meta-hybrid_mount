@@ -1,7 +1,4 @@
-## v1.8.73
+## v1.9.21
 
-Changes since v1.8.72:
-* feat: dynamically create modules.img
-* refactor: refactor mount point strategy
-* refactor: drop hymofs support
-* chore(release): bump version to v1.8.72 [skip ci]
+Changes since v1.9.2:
+* feat(xtask): support signing with encrypted private key

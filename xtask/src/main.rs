@@ -1,12 +1,17 @@
+// Copyright 2025 Meta-Hybrid Mount Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use fs_extra::dir::{self, CopyOptions};
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
+use tempfile::NamedTempFile;
 use zip::{write::FileOptions, CompressionMethod};
+
 mod zip_ext;
 use crate::zip_ext::zip_create_from_directory_with_options;
 
@@ -63,6 +68,14 @@ enum Commands {
         skip_webui: bool,
         #[arg(long, value_enum)]
         arch: Option<Arch>,
+
+        /// Path to the encrypted private key (default: private.enc)
+        #[arg(long, default_value = "private.enc")]
+        key_enc: PathBuf,
+
+        /// Path to the certificate (default: cert.pem)
+        #[arg(long, default_value = "cert.pem")]
+        cert: PathBuf,
     },
     Lint,
 }
@@ -75,8 +88,10 @@ fn main() -> Result<()> {
             release,
             skip_webui,
             arch,
+            key_enc,
+            cert,
         } => {
-            build_full(&root, release, skip_webui, arch)?;
+            build_full(&root, release, skip_webui, arch, &key_enc, &cert)?;
         }
         Commands::Lint => {
             run_clippy(&root)?;
@@ -125,6 +140,8 @@ fn build_full(
     release: bool,
     skip_webui: bool,
     target_arch: Option<Arch>,
+    key_enc_path: &Path,
+    cert_path: &Path,
 ) -> Result<()> {
     let output_dir = root.join("output");
     let stage_dir = output_dir.join("staging");
@@ -179,6 +196,72 @@ fn build_full(
         .compression_level(Some(9));
     zip_create_from_directory_with_options(&zip_file, &stage_dir, |_| zip_options)?;
     println!(":: Build Complete: {}", zip_file.display());
+    if let Ok(password) = env::var("META_HYBRID_SIGN_PASSWORD") {
+        if !password.is_empty() {
+            let abs_key_enc = root.join(key_enc_path);
+            let abs_cert = root.join(cert_path);
+
+            if abs_key_enc.exists() && abs_cert.exists() {
+                decrypt_and_sign(&zip_file, &abs_key_enc, &abs_cert, &password)?;
+            } else {
+                println!(":: Skipping signature: private.enc or cert.pem not found at root.");
+            }
+        }
+    } else {
+        println!(":: Skipping signature: META_HYBRID_SIGN_PASSWORD not set.");
+    }
+
+    Ok(())
+}
+
+fn decrypt_and_sign(
+    zip_path: &Path,
+    enc_key_path: &Path,
+    cert_path: &Path,
+    password: &str,
+) -> Result<()> {
+    println!(":: Decrypting private key...");
+    let temp_key = NamedTempFile::new()?;
+    let temp_key_path = temp_key.path();
+    let status = Command::new("openssl")
+        .args(["aes-256-cbc", "-d", "-pbkdf2", "-in"])
+        .arg(enc_key_path)
+        .arg("-out")
+        .arg(temp_key_path)
+        .arg("-pass")
+        .arg("env:OPENSSL_PASS_VAR")
+        .env("OPENSSL_PASS_VAR", password)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .context("Failed to execute openssl for decryption")?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to decrypt private key. Check password and openssl version.");
+    }
+
+    println!(":: Signing module with ksusig...");
+    let output_path = zip_path.with_file_name(format!(
+        "{}-signed.zip",
+        zip_path.file_stem().unwrap_or_default().to_string_lossy()
+    ));
+
+    let status = Command::new("ksusig")
+        .arg("sign")
+        .arg("--key")
+        .arg(temp_key_path)
+        .arg("--cert")
+        .arg(cert_path)
+        .arg(zip_path)
+        .arg(&output_path)
+        .status()
+        .context("Failed to execute ksusig")?;
+
+    if !status.success() {
+        anyhow::bail!("ksusig signing failed.");
+    }
+    fs::rename(&output_path, zip_path)?;
+    println!(":: Signed successfully!");
     Ok(())
 }
 

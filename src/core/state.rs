@@ -1,3 +1,6 @@
+// Copyright 2025 Meta-Hybrid Mount Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::{
     fs,
     path::PathBuf,
@@ -42,12 +45,16 @@ impl RuntimeState {
         storage_info: (u64, u64, u8),
     ) -> Self {
         let start = SystemTime::now();
+
         let timestamp = start
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+
         let pid = std::process::id();
+
         let zygisksu_enforce = crate::utils::check_zygisksu_enforce_status();
+
         Self {
             timestamp,
             pid,
@@ -63,17 +70,24 @@ impl RuntimeState {
             zygisksu_enforce,
         }
     }
+
     pub fn save(&self) -> Result<()> {
         let json = serde_json::to_string_pretty(self)?;
+
         fs::write(defs::STATE_FILE, json)?;
+
         Ok(())
     }
+
     pub fn load() -> Result<Self> {
         if !std::path::Path::new(defs::STATE_FILE).exists() {
             return Ok(Self::default());
         }
+
         let content = fs::read_to_string(defs::STATE_FILE)?;
+
         let state = serde_json::from_str(&content)?;
+
         Ok(state)
     }
 }
